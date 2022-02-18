@@ -1,7 +1,7 @@
-FROM python:3.10.1-buster
+FROM python:3.10.0
 
 ## The MAINTAINER instruction sets the author field of the generated images.
-MAINTAINER author@example.com
+MAINTAINER anna.mccann@epfl.ch
 
 ## DO NOT EDIT the 3 lines.
 RUN mkdir /physionet
