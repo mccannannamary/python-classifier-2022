@@ -1,6 +1,6 @@
-numpy==1.22.0
-scipy==1.7.3
-scikit-learn==1.0.2
+numpy==1.21.2
+scipy==1.7.1
+scikit-learn==1.0.1
 joblib==1.1.0
 torch==1.9.1
 torchaudio==0.9.1
@@ -10,7 +10,7 @@ matplotlib==3.5.0
 pillow==8.4.0
 jupyter==1.0.0
 scikit-image==0.18.3
-scikit-learn==1.0.1
 scikit-learn-intelex==2021.20211201.114820
 imutils==0.5.4
 opencv-python==4.5.5.62
+PyWavelets==1.1.1

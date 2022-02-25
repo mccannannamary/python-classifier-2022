@@ -1,4 +1,4 @@
-FROM python:3.10.0
+FROM python:3.7.11
 
 ## The MAINTAINER instruction sets the author field of the generated images.
 MAINTAINER anna.mccann@epfl.ch
