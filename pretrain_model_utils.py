@@ -4,7 +4,7 @@ import torchvision.models as models
 
 
 class PretrainedModel(nn.Module):
-    def __init__(self, output_features):
+    def __init__(self):
         super().__init__()
 
         # load a pretrained AlexNet

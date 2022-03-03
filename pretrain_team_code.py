@@ -18,7 +18,7 @@ from pretrain_model_utils import PretrainedModel
 def pretrain_challenge_model(input_folder):
     train_dir = os.path.join(input_folder, 'train')
     val_dir = os.path.join(input_folder, 'val')
-    batch_size=10
+    batch_size = 10
     classes = ("abnormal", "normal")
 
     transform = transforms.Compose([
@@ -51,13 +51,12 @@ def pretrain_challenge_model(input_folder):
         criterion=nn.CrossEntropyLoss,
         lr=0.001,
         batch_size=batch_size,
-        max_epochs=100,
-        module_output_features=2,
+        max_epochs=25,
         optimizer=optim.SGD,
-        optimizer__momentum=0.9,
+        optimizer__momentum=0.5,
         iterator_train__shuffle=True,
         iterator_train__num_workers=4,
-        iterator_valid__shuffle=True,
+        iterator_valid__shuffle=False,
         iterator_valid__num_workers=4,
         train_split=predefined_split(valid_set),
         callbacks=[lrscheduler, checkpoint],
