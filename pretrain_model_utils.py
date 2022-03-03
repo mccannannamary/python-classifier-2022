@@ -18,8 +18,8 @@ class PretrainedModel(nn.Module):
         # hidden units than in the original model
 
         # Freeze layers of feature extractor part of network:
-        for feature in model.features:
-            feature.requires_grad_(False)
+        # for feature in model.features:
+        #     feature.requires_grad_(False)
 
         # Modify layers in classifier part for retraining, only these layers will be updated
         # during training
