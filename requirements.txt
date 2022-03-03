@@ -14,3 +14,6 @@ scikit-learn-intelex==2021.20211201.114820
 imutils==0.5.4
 opencv-python==4.5.5.62
 PyWavelets==1.1.1
+skorch==0.11.0
+tabulate=0.8.9 
+tqdm=4.62.3

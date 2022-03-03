@@ -4,7 +4,7 @@ from scipy import signal
 # Apply preprocessing steps to signal
 def preprocess(sig, fs_resample, fs):
     # resample signal
-    sig = signal.decimate(sig, int(fs/fs_resample), ftype='fir')
+    sig = signal.resample_poly(sig, up=fs_resample, down=fs)
 
     # filter signal
     sig = butterworth_low_pass_filter(sig, 2, 400, fs_resample)
@@ -61,31 +61,42 @@ def schmidt_spike_removal(sig,fs):
     # get max abs val in each window (row)
     maa = np.max(np.abs(windows), axis=1)
 
-    # while there are still maa's greater than 3x median, remove spikes
-    spikes = np.nonzero(maa > 3*np.median(maa))
-    while spikes[0].size != 0:
-        # get index of window with largest maa
-        win_idx = maa.argmax()
+    if maa.size != 0:
+        # while there are still maa's greater than 3x median, remove spikes
+        spikes = np.nonzero(maa > 3*np.median(maa))
+        while spikes[0].size != 0:
+            # get index of window with largest maa
+            win_idx = maa.argmax()
 
-        # get index of spike within window
-        spike_idx = np.argmax(np.abs(windows[win_idx]))
+            # get index of spike within window
+            spike_idx = np.argmax(np.abs(windows[win_idx]))
 
-        # get indices of zero crossings in this window
-        zero_crossings = np.where(np.diff(np.sign(windows[win_idx])))
-        zero_crossings = zero_crossings[0]
+            # get indices of zero crossings in this window
+            zero_crossings = np.where(np.diff(np.sign(windows[win_idx])))
+            zero_crossings = zero_crossings[0]
 
-        # find zero crossings before and after spike
-        first_idx = zero_crossings[zero_crossings < spike_idx][-1]
-        last_idx = zero_crossings[zero_crossings > spike_idx][0]
+            # find zero crossings before and after spike
+            first_idx = zero_crossings[zero_crossings < spike_idx]
+            isempty = first_idx.size == 0
+            if isempty:
+                first_idx = 0
+            else:
+                first_idx = first_idx[-1]
+            last_idx = zero_crossings[zero_crossings > spike_idx]
+            isempty = last_idx.size == 0
+            if isempty:
+                last_idx = win_len_samples-1
+            else:
+                last_idx = last_idx[0]
 
-        # set values in spike window to zero
-        windows[win_idx][first_idx:last_idx+1] = 0
+            # set values in spike window to zero
+            windows[win_idx][first_idx:last_idx+1] = 0
 
-        # recalculate max abs val in each window (row)
-        maa = np.max(np.abs(windows), axis=1)
+            # recalculate max abs val in each window (row)
+            maa = np.max(np.abs(windows), axis=1)
 
-        # recalculate spikes
-        spikes = np.nonzero(maa > 3 * np.median(maa))
+            # recalculate spikes
+            spikes = np.nonzero(maa > 3 * np.median(maa))
 
     sig = windows.reshape(windows.shape[0]*windows.shape[1])
 

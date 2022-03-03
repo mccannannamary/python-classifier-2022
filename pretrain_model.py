@@ -14,11 +14,8 @@ from pretrain_team_code import pretrain_challenge_model
 
 if __name__ == '__main__':
     # Parse the arguments.
-    if not (len(sys.argv) == 3 or len(sys.argv) == 4):
-        raise Exception('Include the data and model folders as arguments, e.g., python train_model.py data model.')
 
     # Define the data and model folders.
     input_folder = sys.argv[1]
-    output_folder = sys.argv[2]
 
-    pretrain_challenge_model(input_folder, output_folder)
+    pretrain_challenge_model(input_folder)
