@@ -53,7 +53,8 @@ def schmidt_spike_removal(sig,fs):
 
     win_len_samples = int(0.5*fs)
 
-    sig = sig[0:-np.mod(len(sig),win_len_samples)]
+    if np.mod(len(sig), win_len_samples) != 0:
+        sig = sig[0:-np.mod(len(sig), win_len_samples)]
 
     # arrange signal into frames each having win_len_samples,
     windows = sig.reshape((-1, win_len_samples))
