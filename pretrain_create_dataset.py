@@ -18,7 +18,7 @@ DATADIR = '../datasets/transfer-learning/'
 fs = 1000
 
 # get X and y data
-X, y = pretrain_data_utils.get_pretrain_data(DATADIR, fs=1000, seg_len=10)
+X, y = pretrain_data_utils.get_pretrain_data(DATADIR, fs=fs, seg_len=10)
 
 # split into train and val sets
 X_train, X_test, y_train, y_test = \

@@ -90,7 +90,9 @@ def save_images(X, y, im_dir, fs=1000, ):
         img = img.resize((224, 224))
 
         # save image in appropriate class directory
-        fname = os.path.join(im_dir, label, str(k).zfill(4))
+        save_dir = os.path.join(im_dir, label)
+        os.makedirs(save_dir, exist_ok=True)
+        fname = os.path.join(save_dir, str(k).zfill(4))
         img.save(fname + '.jpg')
 
 
