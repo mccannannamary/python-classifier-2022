@@ -8,6 +8,7 @@ import torch.nn as nn
 import torch.optim as optim
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
+import pickle
 from skorch import NeuralNetClassifier
 from skorch.helper import predefined_split
 from skorch.callbacks import LRScheduler
@@ -31,7 +32,7 @@ def pretrain_challenge_model(input_folder):
     train_set = datasets.ImageFolder(root=train_dir, transform=transform)
     valid_set = datasets.ImageFolder(root=val_dir, transform=transform)
     train_loader = torch.utils.data.DataLoader(dataset=train_set, batch_size=batch_size, shuffle=True)
-    valid_loader = torch.utils.data.DataLoader(dataset=valid_set, batch_size=batch_size)
+    valid_loader = torch.utils.data.DataLoader(dataset=valid_set, batch_size=batch_size, shuffle=False)
 
     # Create callback, which is a learning rate scheduler that uses
     # torch.optim.lr_scheduler.StepLR to scale learning rates by
@@ -64,6 +65,11 @@ def pretrain_challenge_model(input_folder):
     )
 
     model.fit(train_set, y=None)
+
+    with open('model/alexnet1/alexnet1.pkl', 'wb') as f:
+        pickle.dump(model, f)
+
+####################################################################################
 
 # Find pretrain data files.
 def find_pretrain_files(data_folder):

@@ -1,3 +1,4 @@
+import torch
 import torch.nn as nn
 import torch.optim as optim
 import torchvision.models as models
@@ -35,3 +36,27 @@ class PretrainedModel(nn.Module):
 
     def forward(self, x):
         return self.model(x)
+
+
+def validate(model, loader, device):
+    # set model to evaluation mode
+    model.eval()
+
+    outputs = list()
+    targets = list()
+
+    with torch.no_grad():
+        for i, (batch, target) in enumerate(loader):
+            # move batch and target to GPU on same device
+            # as model and criterion
+            batch.to(device=device)
+            target.to(device=device)
+
+            targets.append(target)
+
+            # perform forward pass and update n_correct
+            with torch.no_grad():
+                preds = model(batch)
+                outputs.append(preds)
+
+    return outputs, targets
