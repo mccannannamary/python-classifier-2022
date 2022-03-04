@@ -18,16 +18,23 @@ DATADIR = '../datasets/transfer-learning/'
 fs = 1000
 
 # get X and y data
-X, y = pretrain_data_utils.get_pretrain_data(DATADIR, fs=fs, seg_len=10)
+X, y, idx = pretrain_data_utils.get_pretrain_data(DATADIR, fs=fs, seg_len=10)
 
 # split into train and val sets
-X_train, X_test, y_train, y_test = \
-    train_test_split(X, y, test_size=0.2, random_state=1, stratify=y)
+X_train, X_test, y_train, y_test, idx_train, idx_test = \
+    train_test_split(X, y, idx, test_size=0.2, random_state=1, stratify=y)
 
-IMDIR = '../datasets/pretrain_img/train/'
+IMDIR = '../datasets/pretrain_img1/'
+os.makedirs(IMDIR, exist_ok=True)
+fname = os.path.join(IMDIR, 'idx_train')
+np.save(fname, idx_train)
+fname = os.path.join(IMDIR, 'idx_test')
+np.save(fname, idx_test)
+
+IMDIR = '../datasets/pretrain_img1/train/'
 pretrain_data_utils.save_images(X_train, y_train, im_dir=IMDIR)
 
-IMDIR = '../datasets/pretrain_img/val/'
+IMDIR = '../datasets/pretrain_img1/val/'
 pretrain_data_utils.save_images(X_test, y_test, im_dir=IMDIR)
 
 print("All data:")
@@ -36,43 +43,6 @@ print("Train data:")
 print(Counter(y_train[:, 0]))
 print("Test data:")
 print(Counter(y_test[:, 0]))
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 # Find pretrain data files.

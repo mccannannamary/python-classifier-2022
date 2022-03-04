@@ -98,6 +98,12 @@ def load_pretrain_recordings(data_folder, data):
 
     return recording
 
+def get_current_idx(data_folder, data):
+    # split data at new lines and get file name
+    recording_information = data.split('\n')[0]
+    entry = recording_information.split(' ')[0]
+    return entry
+
 # get label from pretrain data
 def get_pretrain_label(data):
     label = None

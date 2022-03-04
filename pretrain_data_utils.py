@@ -19,12 +19,14 @@ def get_pretrain_data(DATADIR, fs=1000, seg_len=10):
 
     X = list()
     y = list()
+    idx = list()
 
     n_samples = fs * seg_len
     for i in range(n_pretrain_files):
         # load current patient data
         current_pretrain_data = pretrain_team_code.load_pretrain_data(pretrain_files[i])
         current_recording = pretrain_team_code.load_pretrain_recordings(DATADIR, current_pretrain_data)
+        current_idx = pretrain_team_code.get_current_idx(DATADIR, current_pretrain_data)
 
         # preprocess signal
         current_recording = preprocess_utils.preprocess(current_recording, fs, 2000)
@@ -44,13 +46,16 @@ def get_pretrain_data(DATADIR, fs=1000, seg_len=10):
             current_labels[j] = 1
             y.append(np.tile(current_labels, (n_segments, 1)))
 
+        idx.append(np.tile(current_idx, (n_segments, 1)))
+
     X = np.vstack(X)
     y = np.vstack(y)
+    idx = np.vstack(idx)
 
     # standardize each segment
     X = (X - np.mean(X, axis=1, keepdims=True)) / np.std(X, axis=1, keepdims=True)
 
-    return X, y
+    return X, y, idx
 
 
 def save_images(X, y, im_dir, fs=1000, ):
