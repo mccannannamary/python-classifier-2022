@@ -6,6 +6,7 @@ from wavelets_pytorch.transform import WaveletTransformTorch
 import numpy as np
 from matplotlib import cm
 from PIL import Image
+import hsmm_utils
 
 
 def get_pretrain_data(DATADIR, fs=1000):
@@ -44,7 +45,7 @@ def get_pretrain_data(DATADIR, fs=1000):
     return X, y, idx
 
 
-def segment_pretrain_data(X, y, idx, fs=1000, seg_len=10):
+def segment_pretrain_data(X, y, idx, fs=1000, seg_len=2.5):
     # Find data files
     n_pretrain_files = len(X)
     n_samples = fs*seg_len
@@ -61,15 +62,25 @@ def segment_pretrain_data(X, y, idx, fs=1000, seg_len=10):
         current_recording = X[i]
         current_idx = idx[i]
 
-        n_segments = len(current_recording) // n_samples
+        assigned_states = hsmm_utils.segment(current_recording, fs=fs)
 
-        X_recording = np.reshape(current_recording[0:n_segments * n_samples],
-                                 (n_segments, n_samples))
+        idx_states = hsmm_utils.get_states(assigned_states)
+
+        n_fhs = len(idx_states)
+
+        X_recording = np.ndarray(n_fhs, n_samples)
+
+        for row in range(n_fhs):
+            # get entire cardiac cycle
+            tmp = X[idx_states[row, 1]:idx_states[row+1, 1]]
+            # figure out how many samples need to be padded
+            N = n_samples - len(tmp)
+            X_recording[row, :] = np.concatenate(tmp, np.zeros(N))
 
         # append segmented recordings and indices
         X_s.append(X_recording)
-        y_s.append(np.tile(y[i], (n_segments, 1)))
-        idx_s.append(np.tile(current_idx, (n_segments,1)))
+        y_s.append(np.tile(y[i], (n_fhs, 1)))
+        idx_s.append(np.tile(current_idx, (n_fhs, 1)))
 
     X_s = np.vstack(X_s)
     y_s = np.vstack(y_s)

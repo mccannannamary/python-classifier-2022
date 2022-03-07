@@ -16,7 +16,7 @@ from wavelets_pytorch.transform import WaveletTransformTorch
 DATADIR = '../datasets/transfer-learning/'
 
 fs = 1000
-seg_len = 10
+seg_len = 2.5
 
 # get X and y data
 X, y, idx = pretrain_data_utils.get_pretrain_data(DATADIR, fs=fs)
@@ -28,17 +28,17 @@ X_train, X_test, y_train, y_test, idx_train, idx_test = \
 X_train, y_train, idx_train = pretrain_data_utils.segment_pretrain_data(X_train, y_train, idx_train, fs=fs, seg_len=seg_len)
 X_test, y_test, idx_test = pretrain_data_utils.segment_pretrain_data(X_test, y_test, idx_test, fs=fs, seg_len=seg_len)
 
-IMDIR = '../datasets/pretrain_img1/'
+IMDIR = '../datasets/pretrain_img_fhs/'
 os.makedirs(IMDIR, exist_ok=True)
 fname = os.path.join(IMDIR, 'idx_train')
 np.save(fname, idx_train)
 fname = os.path.join(IMDIR, 'idx_test')
 np.save(fname, idx_test)
 
-IMDIR = '../datasets/pretrain_img1/train/'
+IMDIR = '../datasets/pretrain_img_fhs/train/'
 pretrain_data_utils.save_images(X_train, y_train, idx_train, im_dir=IMDIR, fs=fs)
 
-IMDIR = '../datasets/pretrain_img1/val/'
+IMDIR = '../datasets/pretrain_img_fhs/val/'
 pretrain_data_utils.save_images(X_test, y_test, idx_test, im_dir=IMDIR, fs=fs)
 
 print("All data:")
