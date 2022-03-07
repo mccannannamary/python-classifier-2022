@@ -58,27 +58,27 @@ def segment_pretrain_data(X, y, idx, fs=1000, seg_len=10):
 
     for i in range(n_pretrain_files):
         # load current patient data
-        current_recording = X[i,:]
+        current_recording = X[i]
         current_idx = idx[i]
 
-        # preprocess signal
+        n_segments = len(current_recording) // n_samples
 
-        X.append(current_recording)
+        X_recording = np.reshape(current_recording[0:n_segments * n_samples],
+                                 (n_segments, n_samples))
 
-        # Extract labels and use one-hot encoding
-        current_labels = np.zeros(num_classes, dtype=int)
-        label = pretrain_team_code.get_pretrain_label(current_pretrain_data)
-        if label in classes:
-            j = classes.index(label)
-            current_labels[j] = 1
-            y.append(current_labels)
+        # append segmented recordings and indices
+        X_s.append(X_recording)
+        y_s.append(np.tile(y[i], (n_segments, 1)))
+        idx_s.append(np.tile(current_idx, (n_segments,1)))
 
-        idx.append(current_idx)
+    X_s = np.vstack(X_s)
+    y_s = np.vstack(y_s)
+    idx_s = np.vstack(idx_s)
 
-    return X, y, idx
+    return X_s, y_s, idx_s
 
 
-def save_images(X, y, im_dir, fs=1000, ):
+def save_images(X, y, idx, im_dir, fs=1000):
     classes = ['normal', 'abnormal']
     n_segments = X.shape[0]
 
@@ -117,6 +117,7 @@ def save_images(X, y, im_dir, fs=1000, ):
         # save image in appropriate class directory
         save_dir = os.path.join(im_dir, label)
         os.makedirs(save_dir, exist_ok=True)
+        fname = idx[k][0] + '_' + str(k).zfill(2)
         fname = os.path.join(save_dir, str(k).zfill(4))
         img.save(fname + '.jpg')
 
