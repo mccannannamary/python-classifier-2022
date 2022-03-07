@@ -19,6 +19,7 @@ DATADIR = '../datasets/transfer-learning/'
 fs = 1000
 seg_len = 2.5
 keep_percent = 0.05
+rescale_size=64
 
 # get X and y data
 X, y, names = pretrain_data_utils.get_pretrain_data(DATADIR, fs=fs)
@@ -45,12 +46,13 @@ fname = os.path.join(IMDIR, 'idx_test')
 np.save(fname, idx_test)
 
 IMDIR = '../datasets/pretrain_img_fhs/train/'
-pretrain_data_utils.create_cwt_images(X_train, y_train, idx_train, im_dir=IMDIR, fs=fs)
+pretrain_data_utils.create_cwt_images(X_train, y_train, idx_train, rescale_size=rescale_size, im_dir=IMDIR, fs=fs)
 #pretrain_data_utils.save_images(X_train, y_train, idx_train, im_dir=IMDIR, fs=fs)
 
 IMDIR = '../datasets/pretrain_img_fhs/val/'
-pretrain_data_utils.create_cwt_images(X_test, y_test, idx_test, im_dir=IMDIR, fs=fs)
+pretrain_data_utils.create_cwt_images(X_test, y_test, idx_test, rescale_size=rescale_size, IMDIR, fs=fs)
 #pretrain_data_utils.save_images(X_test, y_test, idx_test, im_dir=IMDIR, fs=fs)
+
 
 print("All data:")
 print(Counter(y[:, 0]))
