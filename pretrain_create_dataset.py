@@ -9,6 +9,7 @@ import numpy as np
 import os
 import pretrain_data_utils
 from sklearn.model_selection import train_test_split
+from sklearn.utils.random import sample_without_replacement
 from collections import Counter
 from matplotlib import cm
 from wavelets_pytorch.transform import WaveletTransformTorch
@@ -17,13 +18,21 @@ DATADIR = '../datasets/transfer-learning/'
 
 fs = 1000
 seg_len = 2.5
+keep_percent = 0.2
 
 # get X and y data
-X, y, idx = pretrain_data_utils.get_pretrain_data(DATADIR, fs=fs)
+X, y, names = pretrain_data_utils.get_pretrain_data(DATADIR, fs=fs)
+
+n_samples = int(keep_percent*len(X))
+idx = sample_without_replacement(len(X), n_samples, random_state=1)
+
+X = [X[i] for i in idx]
+y = [y[i] for i in idx]
+names = [names[i] for i in idx]
 
 # split into train and val sets
 X_train, X_test, y_train, y_test, idx_train, idx_test = \
-    train_test_split(X, y, idx, test_size=0.2, random_state=1, stratify=y)
+    train_test_split(X, y, names, test_size=0.2, random_state=1, stratify=y)
 
 X_train, y_train, idx_train = pretrain_data_utils.segment_pretrain_data(X_train, y_train, idx_train, fs=fs, seg_len=seg_len)
 X_test, y_test, idx_test = pretrain_data_utils.segment_pretrain_data(X_test, y_test, idx_test, fs=fs, seg_len=seg_len)
