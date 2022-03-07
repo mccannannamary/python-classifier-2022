@@ -1,15 +1,14 @@
+import os
 import matplotlib.pyplot as plt
-
 import pretrain_team_code
 import preprocess_utils
 from wavelets_pytorch.transform import WaveletTransformTorch
 import numpy as np
 from matplotlib import cm
 from PIL import Image
-import os
 
 
-def get_pretrain_data(DATADIR, fs=1000, seg_len=10):
+def get_pretrain_data(DATADIR, fs=1000):
     # Find data files
     pretrain_files = pretrain_team_code.find_pretrain_files(DATADIR)
     n_pretrain_files = len(pretrain_files)
@@ -21,7 +20,6 @@ def get_pretrain_data(DATADIR, fs=1000, seg_len=10):
     y = list()
     idx = list()
 
-    n_samples = fs * seg_len
     for i in range(n_pretrain_files):
         # load current patient data
         current_pretrain_data = pretrain_team_code.load_pretrain_data(pretrain_files[i])
@@ -31,12 +29,7 @@ def get_pretrain_data(DATADIR, fs=1000, seg_len=10):
         # preprocess signal
         current_recording = preprocess_utils.preprocess(current_recording, fs, 2000)
 
-        # divide signal into segments according to n_samples in seg_len
-        n_segments = len(current_recording) // n_samples
-
-        X_recording = np.reshape(current_recording[0:n_segments * n_samples],
-                                 (n_segments, n_samples))
-        X.append(X_recording)
+        X.append(current_recording)
 
         # Extract labels and use one-hot encoding
         current_labels = np.zeros(num_classes, dtype=int)
@@ -44,16 +37,43 @@ def get_pretrain_data(DATADIR, fs=1000, seg_len=10):
         if label in classes:
             j = classes.index(label)
             current_labels[j] = 1
-            y.append(np.tile(current_labels, (n_segments, 1)))
+            y.append(current_labels)
 
-        idx.append(np.tile(current_idx, (n_segments, 1)))
+        idx.append(current_idx)
 
-    X = np.vstack(X)
-    y = np.vstack(y)
-    idx = np.vstack(idx)
+    return X, y, idx
 
-    # standardize each segment
-    X = (X - np.mean(X, axis=1, keepdims=True)) / np.std(X, axis=1, keepdims=True)
+
+def segment_pretrain_data(X, y, idx, fs=1000, seg_len=10):
+    # Find data files
+    n_pretrain_files = len(X)
+    n_samples = fs*seg_len
+
+    classes = ['Normal', 'Abnormal']
+    num_classes = len(classes)
+
+    X_s = list()
+    y_s = list()
+    idx_s = list()
+
+    for i in range(n_pretrain_files):
+        # load current patient data
+        current_recording = X[i,:]
+        current_idx = idx[i]
+
+        # preprocess signal
+
+        X.append(current_recording)
+
+        # Extract labels and use one-hot encoding
+        current_labels = np.zeros(num_classes, dtype=int)
+        label = pretrain_team_code.get_pretrain_label(current_pretrain_data)
+        if label in classes:
+            j = classes.index(label)
+            current_labels[j] = 1
+            y.append(current_labels)
+
+        idx.append(current_idx)
 
     return X, y, idx
 

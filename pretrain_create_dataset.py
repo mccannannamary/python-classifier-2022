@@ -18,11 +18,13 @@ DATADIR = '../datasets/transfer-learning/'
 fs = 1000
 
 # get X and y data
-X, y, idx = pretrain_data_utils.get_pretrain_data(DATADIR, fs=fs, seg_len=10)
+X, y, idx = pretrain_data_utils.get_pretrain_data(DATADIR, fs=fs)
 
 # split into train and val sets
 X_train, X_test, y_train, y_test, idx_train, idx_test = \
     train_test_split(X, y, idx, test_size=0.2, random_state=1, stratify=y)
+
+X_train, X_test, y_train, y_test = pretrain_data_utils.segment_pretrain_data(X_train, y_train, fs=fs, seg_len=10)
 
 IMDIR = '../datasets/pretrain_img1/'
 os.makedirs(IMDIR, exist_ok=True)
