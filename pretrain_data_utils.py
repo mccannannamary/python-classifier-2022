@@ -6,6 +6,7 @@ from wavelets_pytorch.transform import WaveletTransformTorch
 import numpy as np
 from matplotlib import cm
 from PIL import Image
+from skimage.transform import resize
 import hsmm_utils
 
 
@@ -89,6 +90,83 @@ def segment_pretrain_data(X, y, idx, fs=1000, seg_len=2.5):
 
     return X_s, y_s, idx_s
 
+def create_cwt_images(X, y, name, rescale_size, jpg_dir, fs=1000):
+    n_samples = X.shape[0]
+
+    X_cwt = np.ndarray((n_samples, rescale_size, rescale_size), dtype='float32')
+
+    dt = 1 / fs
+    dj = 1 / 10
+    fb = WaveletTransformTorch(dt, dj, cuda=True)
+    batch_size = 64
+    batch_start = 0
+    batch_end = batch_size
+
+    while batch_end < n_samples:
+        # get segment data
+        data = X[batch_start:batch_end, :]
+
+        # apply CWT to data, take abs of coeffs
+        cfs = fb.cwt(data)
+        cfs = abs(cfs)
+
+        rescale_cfs = np.ndarray((batch_size, rescale_size, rescale_size))
+        for idx, cf in enumerate(cfs):
+            rescale_cfs[idx, :, :] = \
+                resize(cf, (rescale_size, rescale_size), mode='constant')
+
+            # save cf as image here
+            save_cfs_as_jpg(cf, y[batch_start+idx], name[batch_start+idx], jpg_dir)
+
+        X_cwt[batch_start:batch_end, :, :] = rescale_cfs
+
+        batch_start += batch_size
+        batch_end += batch_size
+
+    # apply CWT to remaining data
+    data = X[batch_start:n_samples, :]
+    cfs = fb.cwt(data)
+    cfs = abs(cfs)
+
+    rescale_cfs = np.ndarray((data.shape[0], rescale_size, rescale_size))
+    for idx, cf in enumerate(cfs):
+        # numpy
+        rescale_cfs[idx, :, :] = \
+            resize(cf, (rescale_size, rescale_size), mode='constant')
+
+        # jpg image
+        save_cfs_as_jpg(cf, )
+
+    X_cwt[batch_start:batch_end, :, :] = rescale_cfs
+
+    return X_cwt
+
+
+def save_cfs_as_jpg(cfs, label, idx, im_dir):
+    # rescale cfs to interval [0, 1]
+    cfs = (cfs - cfs.min()) / (cfs.max() - cfs.min())
+
+    # create colormap
+    cmap = cm.get_cmap('jet', 256)
+
+    # apply colormap to data, return as ints from 0 to 255
+    img = cmap(cfs, bytes=True)
+
+    # convert from rgba to rgb
+    img = np.delete(img, 3, 2)
+
+    # create image from numpy array
+    img = Image.fromarray(img)
+
+    # resize the image
+    img = img.resize((224, 224))
+
+    # save image in appropriate class directory
+    save_dir = os.path.join(im_dir, label)
+    os.makedirs(save_dir, exist_ok=True)
+    fname = idx
+    fname = os.path.join(save_dir, fname)
+    img.save(fname + '.jpg')
 
 def save_images(X, y, idx, im_dir, fs=1000):
     classes = ['normal', 'abnormal']
