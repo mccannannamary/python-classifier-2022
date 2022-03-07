@@ -539,19 +539,21 @@ def expand_qt(qt, old_fs, new_fs, sig_len):
 
 def get_states(assigned_states):
 
+    assigned_states = assigned_states + 1
+
     idx = np.where(np.abs(np.diff(assigned_states)) > 0)[0]
 
     first_state = assigned_states[0]
 
     if first_state > 0:
         if first_state == 4:
-            K = 1
+            K = 0
         if first_state == 3:
-            K = 2
+            K = 1
         if first_state == 2:
-            K = 3
+            K = 2
         if first_state == 1:
-            K = 4
+            K = 3
 
     else:
         first_state = assigned_states[idx[0]+1]
@@ -567,5 +569,7 @@ def get_states(assigned_states):
 
     indx2 = idx[K:]
     rem = np.mod(len(indx2), 4)
-    indx2 = np.delete(indx2, np.s_[-rem+1:])
-    idx_states = np.reshape(indx2, (2, len(indx2)/4))
+    if rem != 0:
+        indx2 = indx2[:-rem]
+    idx_states = np.reshape(indx2, (len(indx2) // 4, 4))
+    return idx_states

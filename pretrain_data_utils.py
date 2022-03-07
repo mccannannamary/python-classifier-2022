@@ -48,7 +48,7 @@ def get_pretrain_data(DATADIR, fs=1000):
 def segment_pretrain_data(X, y, idx, fs=1000, seg_len=2.5):
     # Find data files
     n_pretrain_files = len(X)
-    n_samples = fs*seg_len
+    n_samples = int(fs*seg_len)
 
     classes = ['Normal', 'Abnormal']
     num_classes = len(classes)
@@ -66,16 +66,16 @@ def segment_pretrain_data(X, y, idx, fs=1000, seg_len=2.5):
 
         idx_states = hsmm_utils.get_states(assigned_states)
 
-        n_fhs = len(idx_states)
+        n_fhs = len(idx_states)-1
 
-        X_recording = np.ndarray(n_fhs, n_samples)
+        X_recording = np.ndarray((n_fhs, n_samples))
 
         for row in range(n_fhs):
             # get entire cardiac cycle
-            tmp = X[idx_states[row, 1]:idx_states[row+1, 1]]
+            tmp = X[i][idx_states[row, 0]:idx_states[row+1, 0]]
             # figure out how many samples need to be padded
             N = n_samples - len(tmp)
-            X_recording[row, :] = np.concatenate(tmp, np.zeros(N))
+            X_recording[row, :] = np.concatenate((tmp, np.zeros(N)))
 
         # append segmented recordings and indices
         X_s.append(X_recording)
