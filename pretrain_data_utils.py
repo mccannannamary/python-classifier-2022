@@ -118,7 +118,7 @@ def save_images(X, y, idx, im_dir, fs=1000):
         save_dir = os.path.join(im_dir, label)
         os.makedirs(save_dir, exist_ok=True)
         fname = idx[k][0] + '_' + str(k).zfill(2)
-        fname = os.path.join(save_dir, str(k).zfill(4))
+        fname = os.path.join(save_dir, fname)
         img.save(fname + '.jpg')
 
 
