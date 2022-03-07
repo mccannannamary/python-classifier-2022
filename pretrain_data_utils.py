@@ -73,6 +73,7 @@ def segment_pretrain_data(X, y, idx, fs=1000, seg_len=2.5):
         for row in range(n_fhs):
             # get entire cardiac cycle
             tmp = X[i][idx_states[row, 0]:idx_states[row+1, 0]]
+            tmp = (tmp - np.mean(tmp)) / np.std(tmp)
             # figure out how many samples need to be padded
             N = n_samples - len(tmp)
             X_recording[row, :] = np.concatenate((tmp, np.zeros(N)))
