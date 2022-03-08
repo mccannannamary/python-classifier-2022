@@ -1,11 +1,24 @@
 import torch
 import torch.nn as nn
-import torch.optim as optim
 import torchvision.models as models
+from torchvision import datasets
+
+
+class ImageFolderWithNames(datasets.ImageFolder):
+    """Custom dataset that includes image file names. Extends
+    torchvision.datasets.ImageFolder"""
+
+    # add new method that returns name of image when called
+    def get_name(self, index):
+        path = self.imgs[index][0]
+        path = path.split('/')[3]
+        name = path.split('\\')[2]
+
+        return name
 
 
 class PretrainedModel(nn.Module):
-    def __init__(self):
+    def __init__(self, n_hidden_units):
         super().__init__()
 
         # load a pretrained AlexNet
@@ -24,12 +37,12 @@ class PretrainedModel(nn.Module):
 
         # Modify layers in classifier part for retraining, only these layers will be updated
         # during training
-        model.classifier[1] = nn.Linear(in_features=9216, out_features=128)
-        model.classifier[4] = nn.Linear(in_features=128, out_features=128, bias=True)
-        model.classifier[6] = nn.Linear(in_features=128, out_features=2, bias=True)
-        assert model.classifier[1].out_features == 128, "Should be 128"
-        assert model.classifier[4].in_features == 128, "Should be 128"
-        assert model.classifier[6].in_features == 128, "Should be 128"
+        model.classifier[1] = nn.Linear(in_features=9216, out_features=n_hidden_units)
+        model.classifier[4] = nn.Linear(in_features=n_hidden_units, out_features=n_hidden_units, bias=True)
+        model.classifier[6] = nn.Linear(in_features=n_hidden_units, out_features=2, bias=True)
+        assert model.classifier[1].out_features == n_hidden_units, "Should be 128"
+        assert model.classifier[4].in_features == n_hidden_units, "Should be 128"
+        assert model.classifier[6].in_features == n_hidden_units, "Should be 128"
         assert model.classifier[6].out_features == 2, "Should be 2"
 
         self.model = model

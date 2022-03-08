@@ -17,9 +17,9 @@ from wavelets_pytorch.transform import WaveletTransformTorch
 DATADIR = '../datasets/transfer-learning/'
 
 fs = 1000
-seg_len = 2.5
-keep_percent = 0.05
-rescale_size=64
+seg_len = 1.5
+keep_percent = 0.1
+rescale_size = 64
 
 # get X and y data
 X, y, names = pretrain_data_utils.get_pretrain_data(DATADIR, fs=fs)
@@ -38,29 +38,39 @@ X_train, X_test, y_train, y_test, idx_train, idx_test = \
 X_train, y_train, idx_train = pretrain_data_utils.segment_pretrain_data(X_train, y_train, idx_train, fs=fs, seg_len=seg_len)
 X_test, y_test, idx_test = pretrain_data_utils.segment_pretrain_data(X_test, y_test, idx_test, fs=fs, seg_len=seg_len)
 
-IMDIR = '../datasets/pretrain_img_fhs/'
+IMDIR = '../datasets/pretrain_img_fhs_1.5/'
 os.makedirs(IMDIR, exist_ok=True)
 fname = os.path.join(IMDIR, 'idx_train')
 np.save(fname, idx_train)
 fname = os.path.join(IMDIR, 'idx_test')
 np.save(fname, idx_test)
 
-IMDIR = '../datasets/pretrain_img_fhs/train/'
-pretrain_data_utils.create_cwt_images(X_train, y_train, idx_train, rescale_size=rescale_size, im_dir=IMDIR, fs=fs)
+IMDIR = '../datasets/pretrain_img_fhs_1.5/train/'
+X_cwt_train = pretrain_data_utils.create_cwt_images(X_train, y_train, idx_train, rescale_size=rescale_size, jpg_dir=IMDIR, fs=fs)
 #pretrain_data_utils.save_images(X_train, y_train, idx_train, im_dir=IMDIR, fs=fs)
 
-IMDIR = '../datasets/pretrain_img_fhs/val/'
-pretrain_data_utils.create_cwt_images(X_test, y_test, idx_test, rescale_size=rescale_size, IMDIR, fs=fs)
+IMDIR = '../datasets/pretrain_img_fhs_1.5/val/'
+X_cwt_test = pretrain_data_utils.create_cwt_images(X_test, y_test, idx_test, rescale_size=rescale_size, jpg_dir=IMDIR, fs=fs)
 #pretrain_data_utils.save_images(X_test, y_test, idx_test, im_dir=IMDIR, fs=fs)
 
+SAVEDIR = '../datasets/numpy_fhs_1.5/'
+os.makedirs(SAVEDIR, exist_ok=True)
+fname = os.path.join(SAVEDIR, 'X_train')
+np.save(fname, X_cwt_train)
+fname = os.path.join(SAVEDIR, 'y_train')
+np.save(fname, y_train)
 
-print("All data:")
-print(Counter(y[:, 0]))
-print("Train data:")
-print(Counter(y_train[:, 0]))
-print("Test data:")
-print(Counter(y_test[:, 0]))
+fname = os.path.join(SAVEDIR, 'X_test')
+np.save(fname, X_cwt_test)
+fname = os.path.join(SAVEDIR, 'y_test')
+np.save(fname, y_test)
 
+# print("All data:")
+# print(Counter(y[:, 0]))
+# print("Train data:")
+# print(Counter(y_train[:, 0]))
+# print("Test data:")
+# print(Counter(y_test[:, 0]))
 
 # Find pretrain data files.
 def find_pretrain_files(data_folder):

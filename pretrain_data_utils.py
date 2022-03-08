@@ -75,9 +75,13 @@ def segment_pretrain_data(X, y, idx, fs=1000, seg_len=2.5):
             # get entire cardiac cycle
             tmp = X[i][idx_states[row, 0]:idx_states[row+1, 0]]
             tmp = (tmp - np.mean(tmp)) / np.std(tmp)
-            # figure out how many samples need to be padded
-            N = n_samples - len(tmp)
-            X_recording[row, :] = np.concatenate((tmp, np.zeros(N)))
+            # if FHS too short, pad with zeros, else cut off end
+            if len(tmp) < n_samples:
+                # figure out how many samples need to be padded
+                N = n_samples - len(tmp)
+                X_recording[row, :] = np.concatenate((tmp, np.zeros(N)))
+            else:
+                X_recording[row, :] = tmp[0:n_samples]
 
         # append segmented recordings and indices
         X_s.append(X_recording)
@@ -116,7 +120,7 @@ def create_cwt_images(X, y, name, rescale_size, jpg_dir, fs=1000):
                 resize(cf, (rescale_size, rescale_size), mode='constant')
 
             # save cf as image here
-            save_cfs_as_jpg(cf, y[batch_start+idx], name[batch_start+idx], jpg_dir)
+            save_cfs_as_jpg(cf, y[batch_start+idx], name[batch_start+idx], file_idx=idx, im_dir=jpg_dir)
 
         X_cwt[batch_start:batch_end, :, :] = rescale_cfs
 
@@ -135,14 +139,18 @@ def create_cwt_images(X, y, name, rescale_size, jpg_dir, fs=1000):
             resize(cf, (rescale_size, rescale_size), mode='constant')
 
         # jpg image
-        save_cfs_as_jpg(cf, )
+        save_cfs_as_jpg(cf, y[batch_start+idx,:], name[batch_start+idx], file_idx=idx, im_dir=jpg_dir)
 
     X_cwt[batch_start:batch_end, :, :] = rescale_cfs
 
     return X_cwt
 
 
-def save_cfs_as_jpg(cfs, label, idx, im_dir):
+def save_cfs_as_jpg(cfs, y, idx, file_idx, im_dir):
+    # extract label for saving
+    classes = ['normal', 'abnormal']
+    label = classes[np.argmax(y)]
+
     # rescale cfs to interval [0, 1]
     cfs = (cfs - cfs.min()) / (cfs.max() - cfs.min())
 
@@ -164,7 +172,7 @@ def save_cfs_as_jpg(cfs, label, idx, im_dir):
     # save image in appropriate class directory
     save_dir = os.path.join(im_dir, label)
     os.makedirs(save_dir, exist_ok=True)
-    fname = idx
+    fname = idx[0] + '_' + str(file_idx).zfill(2)
     fname = os.path.join(save_dir, fname)
     img.save(fname + '.jpg')
 
@@ -207,7 +215,7 @@ def save_images(X, y, idx, im_dir, fs=1000):
         # save image in appropriate class directory
         save_dir = os.path.join(im_dir, label)
         os.makedirs(save_dir, exist_ok=True)
-        fname = idx[k][0] + '_' + str(k).zfill(2)
+        fname = idx[k][0] + '_' + str(k).zfill(3)
         fname = os.path.join(save_dir, fname)
         img.save(fname + '.jpg')
 

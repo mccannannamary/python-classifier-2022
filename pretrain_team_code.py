@@ -13,14 +13,17 @@ from skorch import NeuralNetClassifier
 from skorch.helper import predefined_split
 from skorch.callbacks import LRScheduler
 from skorch.callbacks import Checkpoint
+from sklearn.model_selection import GridSearchCV
 from pretrain_model_utils import PretrainedModel
+
+MODEL_DIR = './model/alexnet_fhs_1.0/'
+os.makedirs(MODEL_DIR, exist_ok=True)
 
 
 def pretrain_challenge_model(input_folder):
     train_dir = os.path.join(input_folder, 'train')
     val_dir = os.path.join(input_folder, 'val')
     batch_size = 10
-    classes = ("abnormal", "normal")
 
     transform = transforms.Compose([
         transforms.ToTensor(),
@@ -37,11 +40,12 @@ def pretrain_challenge_model(input_folder):
     # Create callback, which is a learning rate scheduler that uses
     # torch.optim.lr_scheduler.StepLR to scale learning rates by
     # gamma=0.1 every 7 steps
-    lrscheduler = LRScheduler(policy='StepLR', step_size=7, gamma=0.1)
+    # lr_scheduler = LRScheduler(policy='StepLR', step_size=7, gamma=0.1)
 
-    # Create a checkpoint callback, which saves the best model by
-    # monitoring validation accuracy
-    checkpoint = Checkpoint(f_params='best_model.pt', monitor='valid_acc_best')
+    # Create a checkpoint callback, which creates checkpoint of model after each
+    # epoch that meets certain criteria (default is that the validation loss has
+    # improved)
+    # checkpoint = Checkpoint(dirname=MODEL_DIR, f_pickle='best_model1.pkl', monitor='valid_acc_best')
 
     # Create a torch.device() which should be the GPU if CUDA is available,
     # otherwise use cpu
@@ -52,22 +56,39 @@ def pretrain_challenge_model(input_folder):
         criterion=nn.CrossEntropyLoss,
         lr=0.001,
         batch_size=batch_size,
-        max_epochs=25,
+        max_epochs=10,
         optimizer=optim.SGD,
         optimizer__momentum=0.5,
-        iterator_train__shuffle=True,
-        iterator_train__num_workers=4,
-        iterator_valid__shuffle=False,
-        iterator_valid__num_workers=4,
-        train_split=predefined_split(valid_set),
-        callbacks=[lrscheduler, checkpoint],
+        callbacks=[
+            ('lr_scheduler',
+             LRScheduler(policy='StepLR',
+                         step_size=7,
+                         gamma=0.1)),
+            ('checkpoint',
+             Checkpoint(dirname=MODEL_DIR,
+                        f_pickle='best_model1.pkl',
+                        monitor='valid_acc_best'))
+        ],
         device=device
     )
 
-    model.fit(train_set, y=None)
+    # set up grid search parameters
+    # include batch size as hyperparam!
+    params = {
+        'lr': [1e-4, 3e-4, 1e-3, 3e-3, 1e-2, 3e-2],
+        'callbacks__lr_scheduler__step_size': [1, 3, 5, 7],
+        'callbacks__lr_scheduler__gamma': [0.05, 0.1],
+        'module__n_hidden_units': [128, 256, 512, 1024],
+        'optimizer__nesterov': [False, True],
+    }
 
-    with open('model/alexnet1/alexnet1.pkl', 'wb') as f:
-        pickle.dump(model, f)
+    gs = GridSearchCV(estimator=model, param_grid=params, refit=False, cv=5, scoring='accuracy', verbose=1)
+
+    gs.fit(train_set, y=None)
+
+    # with open('model/alexnet_fhs/alexnet_fhs.pkl', 'wb') as f:
+    #     pickle.dump(model, f)
+
 
 ####################################################################################
 
@@ -87,11 +108,13 @@ def find_pretrain_files(data_folder):
 
     return filenames
 
+
 # load patient pretrain data as a string.
 def load_pretrain_data(filename):
     with open(filename, 'r') as f:
         data = f.read()
     return data
+
 
 def load_pretrain_recordings(data_folder, data):
     # split data at new lines and get line with .wav PCG file
@@ -104,11 +127,13 @@ def load_pretrain_recordings(data_folder, data):
 
     return recording
 
+
 def get_current_idx(data_folder, data):
     # split data at new lines and get file name
     recording_information = data.split('\n')[0]
     entry = recording_information.split(' ')[0]
     return entry
+
 
 # get label from pretrain data
 def get_pretrain_label(data):
