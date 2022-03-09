@@ -51,25 +51,60 @@ class PretrainedModel(nn.Module):
         return self.model(x)
 
 
-def validate(model, loader, device):
-    # set model to evaluation mode
-    model.eval()
+class AlexNetMod(nn.Module):
+    def __init__(self, n_hidden_units, n_classes):
+        super().__init__()
 
-    outputs = list()
-    targets = list()
+        ## feature extractor part of model
+        self.conv1 = nn.Conv2d(3, 64, kernel_size=(11, 11), stride=(4, 4), padding=(2, 3))
+        # torch.nn.init.kaiming_normal_(self.conv1.weight)
+        # torch.nn.BatchNorm2d(num_features=64)
+        self.act1 = nn.ReLU(inplace=True)
+        self.pool1 = nn.MaxPool2d(kernel_size=3, stride=2, padding=0, dilation=1, ceil_mode=False)
 
-    with torch.no_grad():
-        for i, (batch, target) in enumerate(loader):
-            # move batch and target to GPU on same device
-            # as model and criterion
-            batch.to(device=device)
-            target.to(device=device)
+        self.conv2 = nn.Conv2d(64, 192, kernel_size=(5, 5), stride=(1, 1), padding=(2, 2))
+        # torch.nn.init.kaiming_normal_(self.conv2.weight)
+        # torch.nn.BatchNorm2d(num_features=192)
+        self.act2 = nn.ReLU(inplace=True)
+        self.pool2 = nn.MaxPool2d(kernel_size=3, stride=2, padding=0, dilation=1, ceil_mode=False)
 
-            targets.append(target)
+        self.conv3 = nn.Conv2d(192, 384, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+        # torch.nn.init.kaiming_normal_(self.conv3.weight)
+        # torch.nn.BatchNorm2d(num_features=384)
+        self.act3 = nn.ReLU(inplace=True)
 
-            # perform forward pass and update n_correct
-            with torch.no_grad():
-                preds = model(batch)
-                outputs.append(preds)
+        self.conv4 = nn.Conv2d(384, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+        # torch.nn.init.kaiming_normal_(self.conv4.weight)
+        # torch.nn.BatchNorm2d(num_features=256)
+        self.act4 = nn.ReLU(inplace=True)
 
-    return outputs, targets
+        self.conv5 = nn.Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+        # torch.nn.init.kaiming_normal_(self.conv5.weight)
+        # torch.nn.BatchNorm2d(num_features=256)
+        self.act5 = nn.ReLU(inplace=True)
+        self.pool3 = nn.MaxPool2d(kernel_size=3, stride=2, padding=0, dilation=1, ceil_mode=False)
+
+        ## classifier part of model
+        self.dropout1 = nn.Dropout(p=0.5, inplace=False)
+        self.fc1 = nn.Linear(in_features=9216, out_features=n_hidden_units, bias=True)
+        self.act6 = nn.ReLU(inplace=True)
+
+        self.dropout2 = nn.Dropout(p=0.5, inplace=False)
+        self.fc2 = nn.Linear(in_features=n_hidden_units, out_features=n_hidden_units, bias=True)
+        self.act7 = nn.ReLU(inplace=True)
+
+        self.fc3 = nn.Linear(in_features=n_hidden_units, out_features=n_classes, bias=True)
+
+    def forward(self, x):
+        x = self.pool1(self.act1(self.conv1(x)))
+        x = self.pool2(self.act2(self.conv2(x)))
+        x = self.act3(self.conv3(x))
+        x = self.act4(self.conv4(x))
+        x = self.pool3(self.act5(self.conv5(x)))
+
+        x = self.act6(self.fc1(self.dropout1(x.view(-1, 9216))))
+        x = self.act7(self.fc2(self.dropout2(x)))
+
+        out = self.fc3(x)
+
+        return out

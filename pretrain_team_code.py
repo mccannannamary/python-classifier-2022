@@ -14,15 +14,16 @@ from skorch.helper import predefined_split
 from skorch.callbacks import LRScheduler
 from skorch.callbacks import Checkpoint
 from pretrain_model_utils import PretrainedModel
+from pretrain_model_utils import AlexNetMod
 
-MODEL_DIR = './model/alexnet_fhs_1.0/'
+MODEL_DIR = './model/alexnet_fhs_2.5/'
 os.makedirs(MODEL_DIR, exist_ok=True)
 
 
 def pretrain_challenge_model(input_folder):
     train_dir = os.path.join(input_folder, 'train')
     val_dir = os.path.join(input_folder, 'val')
-    batch_size = 32
+    batch_size = 64
 
     transform = transforms.Compose([
         transforms.ToTensor(),
@@ -52,7 +53,7 @@ def pretrain_challenge_model(input_folder):
     # (2) checkpoint, creates checkpoint of model after each epoch if model meets
     # "monitor" criteria (best validation accuracy or lowest validation loss)
     model = NeuralNetClassifier(
-        module=PretrainedModel(256),
+        module=PretrainedModel(n_hidden_units=256),
         criterion=nn.CrossEntropyLoss,
         lr=0.001,
         batch_size=batch_size,
