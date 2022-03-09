@@ -37,6 +37,12 @@ def pretrain_challenge_model(input_folder):
     train_loader = torch.utils.data.DataLoader(dataset=train_set, batch_size=batch_size, shuffle=True)
     valid_loader = torch.utils.data.DataLoader(dataset=valid_set, batch_size=batch_size, shuffle=False)
 
+    imgs = list()
+    labels = list()
+    for k, (img, label) in enumerate(train_set):
+        imgs.append(img)
+        labels.append(label)
+
     # Create callback, which is a learning rate scheduler that uses
     # torch.optim.lr_scheduler.StepLR to scale learning rates by
     # gamma=0.1 every 7 steps
@@ -52,7 +58,7 @@ def pretrain_challenge_model(input_folder):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     model = NeuralNetClassifier(
-        module=PretrainedModel,
+        module=PretrainedModel(128),
         criterion=nn.CrossEntropyLoss,
         lr=0.001,
         batch_size=batch_size,
@@ -74,17 +80,23 @@ def pretrain_challenge_model(input_folder):
 
     # set up grid search parameters
     # include batch size as hyperparam!
+    # params = {
+    #     'lr': [1e-4, 3e-4, 1e-3, 3e-3, 1e-2, 3e-2],
+    #     'callbacks__lr_scheduler__step_size': [1, 3, 5, 7],
+    #     'callbacks__lr_scheduler__gamma': [0.05, 0.1],
+    #     'module__n_hidden_units': [128, 256, 512, 1024],
+    #     'optimizer__nesterov': [False, True],
+    # }
+
     params = {
-        'lr': [1e-4, 3e-4, 1e-3, 3e-3, 1e-2, 3e-2],
-        'callbacks__lr_scheduler__step_size': [1, 3, 5, 7],
-        'callbacks__lr_scheduler__gamma': [0.05, 0.1],
-        'module__n_hidden_units': [128, 256, 512, 1024],
-        'optimizer__nesterov': [False, True],
+        'lr': [1e-4, 1e-3],
+        # 'module__n_hidden_units': [128, 512],
+        # 'optimizer__nesterov': [False, True],
     }
 
-    gs = GridSearchCV(estimator=model, param_grid=params, refit=False, cv=5, scoring='accuracy', verbose=1)
+    gs = GridSearchCV(estimator=model, param_grid=params, refit=False, cv=3, scoring='accuracy', verbose=2)
 
-    gs.fit(train_set, y=None)
+    gs.fit(torch.stack(imgs), y=torch.tensor(labels))
 
     # with open('model/alexnet_fhs/alexnet_fhs.pkl', 'wb') as f:
     #     pickle.dump(model, f)
