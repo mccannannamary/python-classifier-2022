@@ -65,6 +65,11 @@ def pretrain_challenge_model(input_folder):
         max_epochs=10,
         optimizer=optim.SGD,
         optimizer__momentum=0.5,
+        train_split=predefined_split(valid_set),
+        iterator_train__shuffle=True,
+        iterator_train__num_workers=8,
+        iterator_valid__shuffle=False,
+        iterator_valid__num_workers=8,
         callbacks=[
             ('lr_scheduler',
              LRScheduler(policy='StepLR',
@@ -78,6 +83,8 @@ def pretrain_challenge_model(input_folder):
         device=device
     )
 
+  #  model.fit(train_set, y=None)
+
     # set up grid search parameters
     # include batch size as hyperparam!
     # params = {
@@ -86,16 +93,17 @@ def pretrain_challenge_model(input_folder):
     #     'callbacks__lr_scheduler__gamma': [0.05, 0.1],
     #     'module__n_hidden_units': [128, 256, 512, 1024],
     #     'optimizer__nesterov': [False, True],
+    #     'optimizer__momentum': [0.5, 0.9],
     # }
 
     params = {
-        'lr': [1e-4, 1e-3],
+        'lr': [1e-3, 1e-4],
         # 'module__n_hidden_units': [128, 512],
         # 'optimizer__nesterov': [False, True],
     }
-
+    #
     gs = GridSearchCV(estimator=model, param_grid=params, refit=False, cv=3, scoring='accuracy', verbose=2)
-
+    #
     gs.fit(torch.stack(imgs), y=torch.tensor(labels))
 
     # with open('model/alexnet_fhs/alexnet_fhs.pkl', 'wb') as f:
