@@ -17,5 +17,6 @@ if __name__ == '__main__':
 
     # Define the data and model folders.
     input_folder = sys.argv[1]
+    model_folder = sys.argv[2]
 
-    pretrain_challenge_model(input_folder)
+    pretrain_challenge_model(input_folder, model_folder)
