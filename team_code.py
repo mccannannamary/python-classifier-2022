@@ -8,11 +8,22 @@
 # Import libraries and functions. You can change or remove them.
 #
 ################################################################################
-
+import preprocess_utils
+import test_data_utils
 from helper_code import *
 import numpy as np, scipy as sp, scipy.stats, os, sys, joblib
-from sklearn.impute import SimpleImputer
-from sklearn.ensemble import RandomForestClassifier
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import torchvision.transforms as transforms
+import torchvision.datasets as datasets
+from skorch import NeuralNetClassifier
+from skorch.helper import predefined_split
+from skorch.callbacks import LRScheduler
+from skorch.callbacks import Checkpoint
+from pretrain_model_utils import AlexNet
+from pretrain_model_utils import ImageFolderWithNames
+
 
 ################################################################################
 #
@@ -22,69 +33,84 @@ from sklearn.ensemble import RandomForestClassifier
 
 # Train your model.
 def train_challenge_model(data_folder, model_folder, verbose):
-    # Find data files.
-    if verbose >= 1:
-        print('Finding data files...')
 
+    create_dataset = False
 
-    # Find the patient data files.
-    patient_files = find_patient_files(data_folder)
-    num_patient_files = len(patient_files)
+    data_folders = [data_folder, '../datasets/circor/val/']
+    image_folders = ['../datasets/cwt_images/train/', '../datasets/cwt_images/val/']
+    pt_ids_names = ['pt_ids_train', 'pt_ids_val']
 
-    if num_patient_files==0:
-        raise Exception('No data was provided.')
+    if create_dataset:
+        for i, data_folder in enumerate(data_folders):
 
-    # Create a folder for the model if it does not already exist.
-    os.makedirs(model_folder, exist_ok=True)
+            # Find data files.
+            if verbose >= 1:
+                print('Finding data files...')
 
-    classes = ['Present', 'Unknown', 'Absent']
-    num_classes = len(classes)
+            recordings, features, labels, rec_names, pt_ids = preprocess_utils.get_challenge_data(data_folder, verbose, fs_resample=1000, fs=2000)
 
-    # Extract the features and labels.
-    if verbose >= 1:
-        print('Extracting features and labels from the Challenge data...')
+            # now perform FHS segmentation
+            X_fhs, y_fhs, names_fhs = preprocess_utils.segment_fhs(recordings, labels, rec_names)
 
-    features = list()
-    labels = list()
+            # save patient ids
+            im_dir = '../datasets/cwt_images/'
+            os.makedirs(im_dir, exist_ok=True)
+            fname = os.path.join(im_dir, pt_ids_names[i])
+            np.save(fname, pt_ids)
 
-    for i in range(num_patient_files):
-        if verbose >= 2:
-            print('    {}/{}...'.format(i+1, num_patient_files))
-
-        # Load the current patient data and recordings.
-        current_patient_data = load_patient_data(patient_files[i])
-        current_recordings = load_recordings(data_folder, current_patient_data)
-
-        # Extract features.
-        current_features = get_features(current_patient_data, current_recordings)
-        features.append(current_features)
-
-        # Extract labels and use one-hot encoding.
-        current_labels = np.zeros(num_classes, dtype=int)
-        label = get_label(current_patient_data)
-        if label in classes:
-            j = classes.index(label)
-            current_labels[j] = 1
-        labels.append(current_labels)
-
-    features = np.vstack(features)
-    labels = np.vstack(labels)
+            # now create and save a CWT image for each segmented FHS
+            preprocess_utils.create_cwt_images(X_fhs, y_fhs, names_fhs, image_folders[i])
 
     # Train the model.
     if verbose >= 1:
         print('Training model...')
 
-    # Define parameters for random forest classifier.
-    n_estimators = 10    # Number of trees in the forest.
-    max_leaf_nodes = 100 # Maximum number of leaf nodes in each tree.
-    random_state = 123   # Random state; set for reproducibility.
+    transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize(
+            (0.485, 0.456, 0.406),
+            (0.229, 0.224, 0.225))
+    ])
 
-    imputer = SimpleImputer().fit(features)
-    features = imputer.transform(features)
-    classifier = RandomForestClassifier(n_estimators=n_estimators, max_leaf_nodes=max_leaf_nodes, random_state=random_state).fit(features, labels)
+    train_set = ImageFolderWithNames(root=image_folders[0], transform=transform)
+    valid_set = ImageFolderWithNames(root=image_folders[1], transform=transform)
+
+    # Create a torch.device() which should be the GPU if CUDA is available
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    lr = 0.001
+    batch_size = 64
+    classifier = NeuralNetClassifier(
+        module=AlexNet(n_hidden_units=256, n_classes=3),
+        criterion=nn.CrossEntropyLoss,
+        lr=0.001,
+        batch_size=batch_size,
+        max_epochs=15,
+        optimizer=optim.SGD,
+        optimizer__momentum=0.9,
+        optimizer__nesterov=False,
+        train_split=predefined_split(valid_set),
+        iterator_train__shuffle=True,
+        iterator_train__num_workers=8,
+        iterator_valid__shuffle=False,
+        iterator_valid__num_workers=8,
+        callbacks=[
+            ('lr_scheduler',
+             LRScheduler(policy='ReduceLROnPlateau')),
+            ('checkpoint',
+             Checkpoint(dirname=model_folder,
+                        monitor='valid_acc_best',
+                        f_pickle='best_model.pkl'))
+        ],
+        device=device
+    ).fit(train_set, y=None)
+
+    # Create a folder for the model if it does not already exist.
+    os.makedirs(model_folder, exist_ok=True)
 
     # Save the model.
-    save_challenge_model(model_folder, classes, imputer, classifier)
+    classes = ['absent', 'present', 'unknown']
+    save_challenge_model(model_folder, classes, classifier)
 
     if verbose >= 1:
         print('Done.')
@@ -98,20 +124,49 @@ def load_challenge_model(model_folder, verbose):
 # Run your trained model. This function is *required*. You should edit this function to add your code, but do *not* change the
 # arguments of this function.
 def run_challenge_model(model, data, recordings, verbose):
+
     classes = model['classes']
-    imputer = model['imputer']
     classifier = model['classifier']
 
-    # Load features.
-    features = get_features(data, recordings)
+    np.seterr(all='raise')
 
-    # Impute missing data.
-    features = features.reshape(1, -1)
-    features = imputer.transform(features)
+    # need to do whole process of filtering, segmenting, and getting FHS images here
+    X_fhs = test_data_utils.segment_data(recordings)
+
+    # create CWT image for each segmented FHS - need to figure out how to
+    # return array of images, or else create a directory with the images
+    # and load one by one (but should be able to store array of images)
+    test_imgs = test_data_utils.create_cwt_images(X_fhs)
+
+    transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize(
+            (0.485, 0.456, 0.406),
+            (0.229, 0.224, 0.225))
+    ])
+
+    img_t = list()
+    for img in test_imgs:
+        img_t.append(transform(img).unsqueeze(0))
+    img_t = torch.vstack(img_t)
+
+    # run each image through model
+    img_probabilities = classifier.predict_proba(img_t)
+
+#    img_probabilities = np.ndarray((len(test_imgs), len(classes)))
+#    for k, img in enumerate(test_imgs):
+#        img_t = transform(img).unsqueeze(0)
+#        img_probabilities[k, :] = classifier.predict_proba(img_t)
+
+    tmp_probabilities = np.mean(img_probabilities, axis=0)
+    probabilities = np.empty_like(tmp_probabilities)
+    probabilities[0] = tmp_probabilities[1]
+    probabilities[1] = tmp_probabilities[2]
+    probabilities[2] = tmp_probabilities[0]
 
     # Get classifier probabilities.
-    probabilities = classifier.predict_proba(features)
-    probabilities = np.asarray(probabilities, dtype=np.float32)[:, 0, 1]
+    #probabilities = classifier.predict_proba(features)
+    #probabilities = np.asarray(probabilities, dtype=np.float32)[:, 0, 1]
 
     # Choose label with higher probability.
     labels = np.zeros(len(classes), dtype=np.int_)
@@ -120,6 +175,7 @@ def run_challenge_model(model, data, recordings, verbose):
 
     return classes, labels, probabilities
 
+
 ################################################################################
 #
 # Optional functions. You can change or remove these functions and/or add new functions.
@@ -127,8 +183,8 @@ def run_challenge_model(model, data, recordings, verbose):
 ################################################################################
 
 # Save your trained model.
-def save_challenge_model(model_folder, classes, imputer, classifier):
-    d = {'classes': classes, 'imputer': imputer, 'classifier': classifier}
+def save_challenge_model(model_folder, classes, classifier):
+    d = {'classes': classes, 'classifier': classifier}
     filename = os.path.join(model_folder, 'model.sav')
     joblib.dump(d, filename, protocol=0)
 

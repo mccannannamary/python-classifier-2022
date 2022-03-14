@@ -221,7 +221,7 @@ def save_images(X, y, idx, im_dir, fs=1000):
 
 
 def plot_images(X, y, fs=1000):
-    classes = ['normal', 'abnormal']
+    classes = ['present', 'unknown', 'absent']
 
     dt = 1 / fs
     dj = 1 / 10

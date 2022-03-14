@@ -65,7 +65,7 @@ def get_springer_features(sig, fs):
 
     # wavelet feature
     wavelet = wavelet_features(sig)
-    wavelet = signal.resample_poly(wavelet, up=features_fs, down=fs)
+    wavelet = signal.resample_poly(wavelet, up=len(homomorphic_env), down=len(wavelet))
     wavelet = normalize_signal(wavelet)
 
     # fig, axs = plt.subplots(4)
@@ -490,7 +490,11 @@ def mvn(x, mean, cov):
     den = np.sqrt((2 * np.pi) ** k * det(cov))
     x = x - mean
 
-    return np.squeeze(np.exp(-x[..., None, :] @ inv(cov) @ x[..., None] / 2)) / den
+    tmp = -x[..., None, :] @ inv(cov) @ x[..., None] / 2
+    if tmp < -500:
+        return 1e-10
+    else:
+        return np.squeeze(np.exp(-x[..., None, :] @ inv(cov) @ x[..., None] / 2)) / den
 
 
 def expand_qt(qt, old_fs, new_fs, sig_len):

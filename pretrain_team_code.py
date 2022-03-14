@@ -8,7 +8,6 @@ import torch.nn as nn
 import torch.optim as optim
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
-import pickle
 from skorch import NeuralNetClassifier
 from skorch.helper import predefined_split
 from skorch.callbacks import LRScheduler
@@ -61,7 +60,7 @@ def pretrain_challenge_model(data_folder, model_folder):
         device=device
     ).fit(train_set, y=None)
 
-    save_pretrain_model(model_folder, model)
+    save_pretrain_model(model_folder, classes, model)
 
 ###########################################################################
 
@@ -120,7 +119,7 @@ def get_pretrain_label(data):
     return label
 
 # Save your trained model.
-def save_pretrain_model(model_folder, classifier):
-    d = {'classifier': classifier}
+def save_pretrain_model(model_folder, classes, classifier):
+    d = {'classes': classes, 'classifier': classifier}
     filename = os.path.join(model_folder, 'model.sav')
     joblib.dump(d, filename, protocol=0)
