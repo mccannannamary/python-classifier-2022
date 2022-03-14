@@ -34,10 +34,10 @@ from pretrain_model_utils import ImageFolderWithNames
 # Train your model.
 def train_challenge_model(data_folder, model_folder, verbose):
 
-    create_dataset = False
+    create_dataset = True
 
     data_folders = [data_folder, '../datasets/circor/val/']
-    image_folders = ['../datasets/cwt_images/train/', '../datasets/cwt_images/val/']
+    image_folders = ['../datasets/seg_images/train/', '../datasets/seg_images/val/']
     pt_ids_names = ['pt_ids_train', 'pt_ids_val']
 
     if create_dataset:
@@ -49,17 +49,17 @@ def train_challenge_model(data_folder, model_folder, verbose):
 
             recordings, features, labels, rec_names, pt_ids = preprocess_utils.get_challenge_data(data_folder, verbose, fs_resample=1000, fs=2000)
 
-            # now perform FHS segmentation
-            X_fhs, y_fhs, names_fhs = preprocess_utils.segment_fhs(recordings, labels, rec_names)
+            # now perform segmentation
+            X_seg, y_seg, names_seg = preprocess_utils.segment_challenge_data(recordings, labels, rec_names)
 
             # save patient ids
-            im_dir = '../datasets/cwt_images/'
+            im_dir = '../datasets/seg_images/'
             os.makedirs(im_dir, exist_ok=True)
             fname = os.path.join(im_dir, pt_ids_names[i])
             np.save(fname, pt_ids)
 
             # now create and save a CWT image for each segmented FHS
-            preprocess_utils.create_cwt_images(X_fhs, y_fhs, names_fhs, image_folders[i])
+            preprocess_utils.create_cwt_images(X_seg, y_seg, names_seg, image_folders[i])
 
     # Train the model.
     if verbose >= 1:
@@ -158,11 +158,12 @@ def run_challenge_model(model, data, recordings, verbose):
 #        img_t = transform(img).unsqueeze(0)
 #        img_probabilities[k, :] = classifier.predict_proba(img_t)
 
-    tmp_probabilities = np.mean(img_probabilities, axis=0)
-    probabilities = np.empty_like(tmp_probabilities)
-    probabilities[0] = tmp_probabilities[1]
-    probabilities[1] = tmp_probabilities[2]
-    probabilities[2] = tmp_probabilities[0]
+    # tmp_probabilities = np.mean(img_probabilities, axis=0)
+    # probabilities = np.empty_like(tmp_probabilities)
+    # probabilities[0] = tmp_probabilities[1]
+    # probabilities[1] = tmp_probabilities[2]
+    # probabilities[2] = tmp_probabilities[0]
+    probabilities = np.mean(img_probabilities, axis=0)
 
     # Get classifier probabilities.
     #probabilities = classifier.predict_proba(features)

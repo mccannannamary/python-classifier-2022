@@ -10,6 +10,40 @@ from wavelets_pytorch.transform import WaveletTransformTorch
 
 def segment_data(X):
     fs = 1000
+    seg_len = 10.0
+
+    n_recordings = len(X)
+    n_samples = int(fs*seg_len)
+
+    X_seg = list()
+
+    for i in range(n_recordings):
+        # load current patient data
+        current_recording = X[i]
+
+        n_segs = len(current_recording) // n_samples
+
+        start_idx = 0
+        end_idx = n_samples
+        X_recording = np.ndarray((n_segs, n_samples))
+
+        for seg in range(n_segs):
+            # get entire cardiac cycle
+            tmp = X[i][start_idx:end_idx]
+            tmp = (tmp - np.mean(tmp)) / np.std(tmp)
+            # if FHS too short, pad with zeros, else cut off end
+            X_recording[seg, :] = tmp
+
+        # append segmented recordings and labels
+        X_seg.append(X_recording)
+
+    X_seg = np.vstack(X_seg)
+
+    return X_seg
+
+
+def segment_fhs(X):
+    fs = 1000
     seg_len = 1.0
 
     # Find data files

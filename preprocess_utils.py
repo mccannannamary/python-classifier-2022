@@ -245,7 +245,7 @@ def segment_challenge_data(X, y, rec_names):
         current_recording = X[i]
         current_name = rec_names[i]
 
-        n_segs = np.floor(len(current_recording) / n_samples)
+        n_segs = len(current_recording) // n_samples
 
         start_idx = 0
         end_idx = n_samples
