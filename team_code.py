@@ -50,7 +50,7 @@ def train_challenge_model(data_folder, model_folder, verbose):
             recordings, features, labels, rec_names, pt_ids = preprocess_utils.get_challenge_data(data_folder, verbose, fs_resample=1000, fs=2000)
 
             # now perform segmentation
-            X_seg, y_seg, names_seg = preprocess_utils.segment_challenge_data(recordings, labels, rec_names)
+            X_seg, y_seg, names_seg = preprocess_utils.segment_fhs(recordings, labels, rec_names)
 
             # save patient ids
             im_dir = '../datasets/seg_images/'
@@ -65,11 +65,28 @@ def train_challenge_model(data_folder, model_folder, verbose):
     if verbose >= 1:
         print('Training model...')
 
+    # transform = transforms.Compose([
+    #     transforms.ToTensor(),
+    #     transforms.Normalize(
+    #         (0.485, 0.456, 0.406),
+    #         (0.229, 0.224, 0.225))
+    # ])
+
+    # train_set = ImageFolderWithNames(root=image_folders[0], transform=transform)
+    # valid_set = ImageFolderWithNames(root=image_folders[1], transform=transform)
+
+    # train_set = ImageFolderWithNames(root=image_folders[0], transform=transforms.ToTensor())
+    #
+    # # compute mean and standard deviation of train set
+    # imgs = torch.stack([img_t for img_t, _ in train_set], dim=3)
+    # mean = imgs.view(3, -1).mean(dim=1)
+    # std = imgs.view(3, -1).std(dim=1)
+
     transform = transforms.Compose([
         transforms.ToTensor(),
         transforms.Normalize(
-            (0.485, 0.456, 0.406),
-            (0.229, 0.224, 0.225))
+            (0.0046, 0.0099, 0.5459),
+            (0.0231, 0.0546, 0.0977))
     ])
 
     train_set = ImageFolderWithNames(root=image_folders[0], transform=transform)
@@ -79,7 +96,7 @@ def train_challenge_model(data_folder, model_folder, verbose):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     lr = 0.001
-    batch_size = 64
+    batch_size = 15
     classifier = NeuralNetClassifier(
         module=AlexNet(n_hidden_units=256, n_classes=3),
         criterion=nn.CrossEntropyLoss,
@@ -89,6 +106,7 @@ def train_challenge_model(data_folder, model_folder, verbose):
         optimizer=optim.SGD,
         optimizer__momentum=0.9,
         optimizer__nesterov=False,
+        optimizer__weight_decay=0.01,
         train_split=predefined_split(valid_set),
         iterator_train__shuffle=True,
         iterator_train__num_workers=8,

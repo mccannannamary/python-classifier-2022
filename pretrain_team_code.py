@@ -22,11 +22,18 @@ def pretrain_challenge_model(data_folder, model_folder):
     val_dir = os.path.join(data_folder, 'val')
     batch_size = 64
 
+    # transform = transforms.Compose([
+    #     transforms.ToTensor(),
+    #     transforms.Normalize(
+    #         (0.485, 0.456, 0.406),
+    #         (0.229, 0.224, 0.225))
+    # ])
+    #
     transform = transforms.Compose([
         transforms.ToTensor(),
         transforms.Normalize(
-            (0.485, 0.456, 0.406),
-            (0.229, 0.224, 0.225))
+            (0.0138, 0.0387, 0.5723),
+            (0.0844, 0.1595, 0.1524))
     ])
 
     train_set = datasets.ImageFolder(root=train_dir, transform=transform)
@@ -55,11 +62,12 @@ def pretrain_challenge_model(data_folder, model_folder):
             ('checkpoint',
              Checkpoint(dirname=model_folder,
                         monitor='valid_acc_best',
-                        f_pickle='best_model_batch_15.pkl'))
+                        f_pickle='alexnet_pretrain.pkl'))
         ],
         device=device
     ).fit(train_set, y=None)
 
+    classes = ['absent', 'present', 'unknown']
     save_pretrain_model(model_folder, classes, model)
 
 ###########################################################################
