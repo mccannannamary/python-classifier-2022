@@ -10,7 +10,7 @@ from wavelets_pytorch.transform import WaveletTransformTorch
 
 def segment_data(X):
     fs = 1000
-    seg_len = 10.0
+    seg_len = 7.5
 
     n_recordings = len(X)
     n_samples = int(fs*seg_len)
@@ -28,65 +28,20 @@ def segment_data(X):
         X_recording = np.ndarray((n_segs, n_samples))
 
         for seg in range(n_segs):
-            # get entire cardiac cycle
             tmp = X[i][start_idx:end_idx]
             tmp = (tmp - np.mean(tmp)) / np.std(tmp)
-            # if FHS too short, pad with zeros, else cut off end
             X_recording[seg, :] = tmp
 
-        # append segmented recordings and labels
+            start_idx += n_samples
+            end_idx += n_samples
+
+        # append segmented recordings
         X_seg.append(X_recording)
 
     X_seg = np.vstack(X_seg)
 
     return X_seg
 
-
-def segment_fhs(X):
-    fs = 1000
-    seg_len = 1.0
-
-    # Find data files
-    n_test_files = len(X)
-    n_samples = int(fs*seg_len)
-
-    X_fhs = list()
-
-    for i in range(n_test_files):
-        # load current patient data
-        current_recording = X[i]
-
-        #plt.plot(current_recording)
-        #plt.show()
-
-        lpf_recording = preprocess_utils.butterworth_low_pass_filter(current_recording, 5, 150, fs)
-        assigned_states = hsmm_utils.segment(lpf_recording, fs=fs)
-        #plot_segmentations(lpf_recording, assigned_states)
-
-        idx_states = hsmm_utils.get_states(assigned_states)
-
-        n_fhs = len(idx_states)-1
-
-        X_recording = np.ndarray((n_fhs, n_samples))
-
-        for row in range(n_fhs):
-            # get entire cardiac cycle
-            tmp = X[i][idx_states[row, 0]:idx_states[row+1, 0]]
-            tmp = (tmp - np.mean(tmp)) / np.std(tmp)
-            # if FHS too short, pad with zeros, else cut off end
-            if len(tmp) < n_samples:
-                # figure out how many samples need to be padded
-                N = n_samples - len(tmp)
-                X_recording[row, :] = np.concatenate((tmp, np.zeros(N)))
-            else:
-                X_recording[row, :] = tmp[0:n_samples]
-
-        # append segmented recordings and labels
-        X_fhs.append(X_recording)
-
-    X_fhs = np.vstack(X_fhs)
-
-    return X_fhs
 
 def create_cwt_images(X):
     fs = 1000

@@ -39,7 +39,7 @@ def train_challenge_model(data_folder, model_folder, verbose):
     pretrained_model_folder = './pretrain_seg_alexnet/'
 
     data_folders = [data_folder, '../datasets/circor/val/']
-    image_folders = ['../datasets/seg_images/train/', '../datasets/seg_images/val/']
+    image_folders = ['../datasets/circor_img_seg/train/', '../datasets/circor_img_seg/val/']
     pt_ids_names = ['pt_ids_train', 'pt_ids_val']
 
     if create_dataset:
@@ -141,14 +141,16 @@ def run_challenge_model(model, data, recordings, verbose):
     np.seterr(all='raise')
 
     # need to do whole process of filtering, segmenting, and getting FHS images here
-    X_fhs = test_data_utils.segment_data(recordings)
+    X_seg = test_data_utils.segment_data(recordings)
 
     # create CWT image for each segmented FHS - need to figure out how to
     # return array of images, or else create a directory with the images
     # and load one by one (but should be able to store array of images)
-    test_imgs = test_data_utils.create_cwt_images(X_fhs)
+    test_imgs = test_data_utils.create_cwt_images(X_seg)
 
     transform = transforms.Compose([
+        transforms.RandomResizedCrop(224),
+        transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
         transforms.Normalize(
             (0.485, 0.456, 0.406),
@@ -162,22 +164,7 @@ def run_challenge_model(model, data, recordings, verbose):
 
     # run each image through model
     img_probabilities = classifier.predict_proba(img_t)
-
-#    img_probabilities = np.ndarray((len(test_imgs), len(classes)))
-#    for k, img in enumerate(test_imgs):
-#        img_t = transform(img).unsqueeze(0)
-#        img_probabilities[k, :] = classifier.predict_proba(img_t)
-
-    # tmp_probabilities = np.mean(img_probabilities, axis=0)
-    # probabilities = np.empty_like(tmp_probabilities)
-    # probabilities[0] = tmp_probabilities[1]
-    # probabilities[1] = tmp_probabilities[2]
-    # probabilities[2] = tmp_probabilities[0]
     probabilities = np.mean(img_probabilities, axis=0)
-
-    # Get classifier probabilities.
-    #probabilities = classifier.predict_proba(features)
-    #probabilities = np.asarray(probabilities, dtype=np.float32)[:, 0, 1]
 
     # Choose label with higher probability.
     labels = np.zeros(len(classes), dtype=np.int_)

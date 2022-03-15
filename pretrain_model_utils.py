@@ -32,8 +32,8 @@ class AlexNet(nn.Module):
         # hidden units than in the original model
 
         # Freeze layers of feature extractor part of network:
-        # for feature in model.features:
-        #     feature.requires_grad_(False)
+        for feature in model.features:
+            feature.requires_grad_(False)
 
         # Modify layers in classifier part for training
         model.classifier[1] = nn.Linear(in_features=9216, out_features=n_hidden_units)
