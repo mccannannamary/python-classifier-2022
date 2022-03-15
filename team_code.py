@@ -50,10 +50,10 @@ def train_challenge_model(data_folder, model_folder, verbose):
             recordings, features, labels, rec_names, pt_ids = preprocess_utils.get_challenge_data(data_folder, verbose, fs_resample=1000, fs=2000)
 
             # now perform segmentation
-            X_seg, y_seg, names_seg = preprocess_utils.segment_fhs(recordings, labels, rec_names)
+            X_seg, y_seg, names_seg = preprocess_utils.segment_challenge_data(recordings, labels, rec_names)
 
             # save patient ids
-            im_dir = '../datasets/seg_images/'
+            im_dir = '../datasets/circor_img_seg/'
             os.makedirs(im_dir, exist_ok=True)
             fname = os.path.join(im_dir, pt_ids_names[i])
             np.save(fname, pt_ids)
@@ -77,10 +77,10 @@ def train_challenge_model(data_folder, model_folder, verbose):
 
     # train_set = ImageFolderWithNames(root=image_folders[0], transform=transforms.ToTensor())
     #
-    # # compute mean and standard deviation of train set
-    # imgs = torch.stack([img_t for img_t, _ in train_set], dim=3)
-    # mean = imgs.view(3, -1).mean(dim=1)
-    # std = imgs.view(3, -1).std(dim=1)
+    # compute mean and standard deviation of train set
+    imgs = torch.stack([img_t for img_t, _ in train_set], dim=3)
+    mean = imgs.view(3, -1).mean(dim=1)
+    std = imgs.view(3, -1).std(dim=1)
 
     transform = transforms.Compose([
         transforms.ToTensor(),

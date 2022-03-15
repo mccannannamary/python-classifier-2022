@@ -237,7 +237,7 @@ def get_challenge_data(data_folder, verbose, fs_resample=1000, fs=2000):
 
 def segment_challenge_data(X, y, rec_names):
     fs = 1000
-    seg_len = 10.0
+    seg_len = 7.5
 
     n_recordings = len(X)
     n_samples = int(fs*seg_len)
@@ -264,6 +264,9 @@ def segment_challenge_data(X, y, rec_names):
             # if FHS too short, pad with zeros, else cut off end
             X_recording[seg, :] = tmp
             names_seg.append(current_name[0] + '_' + str(seg).zfill(3))
+
+            start_idx += n_samples
+            end_idx += n_samples
 
         # append segmented recordings and labels
         X_seg.append(X_recording)
