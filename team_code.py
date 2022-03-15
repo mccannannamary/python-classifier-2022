@@ -36,6 +36,8 @@ def train_challenge_model(data_folder, model_folder, verbose):
 
     create_dataset = True
 
+    pretrained_model_folder = './pretrain_seg_alexnet/'
+
     data_folders = [data_folder, '../datasets/circor/val/']
     image_folders = ['../datasets/seg_images/train/', '../datasets/seg_images/val/']
     pt_ids_names = ['pt_ids_train', 'pt_ids_val']
@@ -65,63 +67,53 @@ def train_challenge_model(data_folder, model_folder, verbose):
     if verbose >= 1:
         print('Training model...')
 
-    # transform = transforms.Compose([
-    #     transforms.ToTensor(),
-    #     transforms.Normalize(
-    #         (0.485, 0.456, 0.406),
-    #         (0.229, 0.224, 0.225))
-    # ])
-
-    # train_set = ImageFolderWithNames(root=image_folders[0], transform=transform)
-    # valid_set = ImageFolderWithNames(root=image_folders[1], transform=transform)
-
-    # train_set = ImageFolderWithNames(root=image_folders[0], transform=transforms.ToTensor())
-    #
-    # compute mean and standard deviation of train set
-    imgs = torch.stack([img_t for img_t, _ in train_set], dim=3)
-    mean = imgs.view(3, -1).mean(dim=1)
-    std = imgs.view(3, -1).std(dim=1)
-
     transform = transforms.Compose([
+        transforms.RandomResizedCrop(224),
+        transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
         transforms.Normalize(
-            (0.0046, 0.0099, 0.5459),
-            (0.0231, 0.0546, 0.0977))
+            (0.485, 0.456, 0.406),
+            (0.229, 0.224, 0.225))
     ])
 
-    train_set = ImageFolderWithNames(root=image_folders[0], transform=transform)
-    valid_set = ImageFolderWithNames(root=image_folders[1], transform=transform)
+    train_set = datasets.ImageFolder(root=image_folders[0], transform=transform)
+    valid_set = datasets.ImageFolder(root=image_folders[1], transform=transform)
 
     # Create a torch.device() which should be the GPU if CUDA is available
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     lr = 0.001
     batch_size = 15
-    classifier = NeuralNetClassifier(
-        module=AlexNet(n_hidden_units=256, n_classes=3),
-        criterion=nn.CrossEntropyLoss,
-        lr=0.001,
-        batch_size=batch_size,
-        max_epochs=15,
-        optimizer=optim.SGD,
-        optimizer__momentum=0.9,
-        optimizer__nesterov=False,
-        optimizer__weight_decay=0.01,
-        train_split=predefined_split(valid_set),
-        iterator_train__shuffle=True,
-        iterator_train__num_workers=8,
-        iterator_valid__shuffle=False,
-        iterator_valid__num_workers=8,
-        callbacks=[
-            ('lr_scheduler',
-             LRScheduler(policy='ReduceLROnPlateau')),
-            ('checkpoint',
-             Checkpoint(dirname=model_folder,
-                        monitor='valid_acc_best',
-                        f_pickle='best_model.pkl'))
-        ],
-        device=device
-    ).fit(train_set, y=None)
+    # classifier = NeuralNetClassifier(
+    #     module=AlexNet(n_hidden_units=256, n_classes=3),
+    #     criterion=nn.CrossEntropyLoss,
+    #     lr=0.001,
+    #     batch_size=batch_size,
+    #     max_epochs=15,
+    #     optimizer=optim.SGD,
+    #     optimizer__momentum=0.9,
+    #     optimizer__nesterov=False,
+    #     optimizer__weight_decay=0.01,
+    #     train_split=predefined_split(valid_set),
+    #     iterator_train__shuffle=True,
+    #     iterator_train__num_workers=8,
+    #     iterator_valid__shuffle=False,
+    #     iterator_valid__num_workers=8,
+    #     callbacks=[
+    #         ('lr_scheduler',
+    #          LRScheduler(policy='ReduceLROnPlateau')),
+    #         ('checkpoint',
+    #          Checkpoint(dirname=model_folder,
+    #                     monitor='valid_acc_best',
+    #                     f_pickle='best_model.pkl'))
+    #     ],
+    #     device=device
+    # ).fit(train_set, y=None)
+
+    model = load_challenge_model(pretrained_model_folder, verbose)
+    classifier = model['classifier']
+
+    classifier.fit(train_set, y=None)
 
     # Create a folder for the model if it does not already exist.
     os.makedirs(model_folder, exist_ok=True)

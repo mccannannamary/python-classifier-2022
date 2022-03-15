@@ -7,6 +7,7 @@ import numpy as np
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 from pretrain_model_utils import ImageFolderWithNames
+from team_code import load_challenge_model
 
 def evaluate_pretrain_model(input_dir, model_dir):
 
@@ -21,6 +22,8 @@ def evaluate_pretrain_model(input_dir, model_dir):
     idx_val = np.load(fname)
 
     transform = transforms.Compose([
+        transforms.RandomResizedCrop(224),
+        transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
         transforms.Normalize(
             (0.485, 0.456, 0.406),
@@ -30,9 +33,8 @@ def evaluate_pretrain_model(input_dir, model_dir):
     train_set = datasets.ImageFolder(root=train_dir, transform=transform)
     valid_set = ImageFolderWithNames(root=val_dir, transform=transform)
 
-    fname = os.path.join(model_dir,'alexnet_fhs.pkl')
-    with open(fname, 'rb') as f:
-        model = pickle.load(f)
+    model = load_challenge_model(model_dir, 1)
+    model = model['classifier']
 
     # train stats
     preds = model.predict(train_set)

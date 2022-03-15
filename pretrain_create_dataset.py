@@ -18,23 +18,16 @@ DATADIR = '../datasets/transfer-learning/'
 
 fs = 1000
 seg_len = 7.5
-keep_percent = 0.2
 
 # get X and y data
 X, y, names = pretrain_data_utils.get_pretrain_data(DATADIR, fs=fs)
-
-n_samples = int(keep_percent*len(X))
-idx = sample_without_replacement(len(X), n_samples, random_state=1)
-
-X = [X[i] for i in idx]
-y = [y[i] for i in idx]
-names = [names[i] for i in idx]
 
 # split into train and val sets
 X_train, X_test, y_train, y_test, idx_train, idx_test = \
     train_test_split(X, y, names, test_size=0.2, random_state=1, stratify=y)
 
-X_train, y_train, idx_train = pretrain_data_utils.segment_pretrain_data(X_train, y_train, idx_train, fs=fs, seg_len=seg_len)
+X_train, y_train, idx_train = pretrain_data_utils.segment_pretrain_data(X_train, y_train, idx_train, fs=fs,
+                                                                        seg_len=seg_len)
 X_test, y_test, idx_test = pretrain_data_utils.segment_pretrain_data(X_test, y_test, idx_test, fs=fs, seg_len=seg_len)
 
 IMDIR = '../datasets/pretrain_img_seg/'

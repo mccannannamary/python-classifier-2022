@@ -22,18 +22,13 @@ def pretrain_challenge_model(data_folder, model_folder):
     val_dir = os.path.join(data_folder, 'val')
     batch_size = 64
 
-    # transform = transforms.Compose([
-    #     transforms.ToTensor(),
-    #     transforms.Normalize(
-    #         (0.485, 0.456, 0.406),
-    #         (0.229, 0.224, 0.225))
-    # ])
-    #
     transform = transforms.Compose([
+        transforms.RandomResizedCrop(224),
+        transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
         transforms.Normalize(
-            (0.0138, 0.0387, 0.5723),
-            (0.0844, 0.1595, 0.1524))
+            (0.485, 0.456, 0.406),
+            (0.229, 0.224, 0.225))
     ])
 
     train_set = datasets.ImageFolder(root=train_dir, transform=transform)
@@ -51,6 +46,7 @@ def pretrain_challenge_model(data_folder, model_folder):
         optimizer=optim.SGD,
         optimizer__momentum=0.9,
         optimizer__nesterov=False,
+        optimizer__weight_decay=0.01,
         train_split=predefined_split(valid_set),
         iterator_train__shuffle=True,
         iterator_train__num_workers=8,
