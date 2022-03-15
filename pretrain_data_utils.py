@@ -46,13 +46,10 @@ def get_pretrain_data(DATADIR, fs=1000):
     return X, y, idx
 
 
-def segment_pretrain_data(X, y, idx, fs=1000, seg_len=2.5):
+def segment_pretrain_data(X, y, idx, fs=1000, seg_len=7.5):
     # Find data files
     n_pretrain_files = len(X)
     n_samples = int(fs*seg_len)
-
-    classes = ['Normal', 'Abnormal']
-    num_classes = len(classes)
 
     X_s = list()
     y_s = list()
@@ -63,30 +60,24 @@ def segment_pretrain_data(X, y, idx, fs=1000, seg_len=2.5):
         current_recording = X[i]
         current_idx = idx[i]
 
-        assigned_states = hsmm_utils.segment(current_recording, fs=fs)
+        n_seg = len(current_recording) // n_samples
+        X_recording = np.ndarray((n_seg, n_samples))
+        start_idx = 0
+        end_idx = n_samples
 
-        idx_states = hsmm_utils.get_states(assigned_states)
-
-        n_fhs = len(idx_states)-1
-
-        X_recording = np.ndarray((n_fhs, n_samples))
-
-        for row in range(n_fhs):
+        for seg in range(n_seg):
             # get entire cardiac cycle
-            tmp = X[i][idx_states[row, 0]:idx_states[row+1, 0]]
+            tmp = X[i][start_idx:end_idx]
             tmp = (tmp - np.mean(tmp)) / np.std(tmp)
-            # if FHS too short, pad with zeros, else cut off end
-            if len(tmp) < n_samples:
-                # figure out how many samples need to be padded
-                N = n_samples - len(tmp)
-                X_recording[row, :] = np.concatenate((tmp, np.zeros(N)))
-            else:
-                X_recording[row, :] = tmp[0:n_samples]
+            X_recording[seg, :] = tmp
+
+            start_idx += n_samples
+            end_idx += n_samples
 
         # append segmented recordings and indices
         X_s.append(X_recording)
-        y_s.append(np.tile(y[i], (n_fhs, 1)))
-        idx_s.append(np.tile(current_idx, (n_fhs, 1)))
+        y_s.append(np.tile(y[i], (n_seg, 1)))
+        idx_s.append(np.tile(current_idx, (n_seg, 1)))
 
     X_s = np.vstack(X_s)
     y_s = np.vstack(y_s)
@@ -94,10 +85,8 @@ def segment_pretrain_data(X, y, idx, fs=1000, seg_len=2.5):
 
     return X_s, y_s, idx_s
 
-def create_cwt_images(X, y, name, rescale_size, jpg_dir, fs=1000):
+def create_cwt_images(X, y, name, jpg_dir, fs=1000):
     n_samples = X.shape[0]
-
-    X_cwt = np.ndarray((n_samples, rescale_size, rescale_size), dtype='float32')
 
     dt = 1 / fs
     dj = 1 / 10
@@ -114,15 +103,9 @@ def create_cwt_images(X, y, name, rescale_size, jpg_dir, fs=1000):
         cfs = fb.cwt(data)
         cfs = abs(cfs)
 
-        rescale_cfs = np.ndarray((batch_size, rescale_size, rescale_size))
         for idx, cf in enumerate(cfs):
-            rescale_cfs[idx, :, :] = \
-                resize(cf, (rescale_size, rescale_size), mode='constant')
-
             # save cf as image here
             save_cfs_as_jpg(cf, y[batch_start+idx], name[batch_start+idx], file_idx=idx, im_dir=jpg_dir)
-
-        X_cwt[batch_start:batch_end, :, :] = rescale_cfs
 
         batch_start += batch_size
         batch_end += batch_size
@@ -132,18 +115,9 @@ def create_cwt_images(X, y, name, rescale_size, jpg_dir, fs=1000):
     cfs = fb.cwt(data)
     cfs = abs(cfs)
 
-    rescale_cfs = np.ndarray((data.shape[0], rescale_size, rescale_size))
     for idx, cf in enumerate(cfs):
-        # numpy
-        rescale_cfs[idx, :, :] = \
-            resize(cf, (rescale_size, rescale_size), mode='constant')
-
         # jpg image
         save_cfs_as_jpg(cf, y[batch_start+idx,:], name[batch_start+idx], file_idx=idx, im_dir=jpg_dir)
-
-    X_cwt[batch_start:batch_end, :, :] = rescale_cfs
-
-    return X_cwt
 
 
 def save_cfs_as_jpg(cfs, y, idx, file_idx, im_dir):
