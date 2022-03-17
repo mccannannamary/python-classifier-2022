@@ -1,7 +1,4 @@
-import pywt
-
 from helper_code import *
-from team_code import *
 import numpy as np
 from scipy import signal
 from matplotlib import cm
@@ -170,10 +167,7 @@ def get_challenge_data(data_folder, verbose, fs_resample=1000, fs=4000):
             recording = preprocess(current_recordings[r], fs_resample=fs_resample, fs=fs)
             recordings.append(recording)
 
-        # Get label for each recording - this is where should differ if I want to relabel
-        # for the different types of murmurs, or for depending on whether murmur heard at this
-        # location or not
-        # Extract labels and use one-hot encoding.
+        # Extract label for each recording using one-hot encoding
         current_labels = np.zeros(n_classes, dtype=int)
         label = get_label(current_patient_data)
         if label in classes:
@@ -186,6 +180,7 @@ def get_challenge_data(data_folder, verbose, fs_resample=1000, fs=4000):
     features = np.vstack(features)
 
     return recordings, features, labels, rec_names
+
 
 def segment_challenge_data(X, y, rec_names):
     fs = 1000
@@ -213,12 +208,21 @@ def segment_challenge_data(X, y, rec_names):
             # get entire cardiac cycle
             tmp = X[i][start_idx:end_idx]
             tmp = (tmp - np.mean(tmp)) / np.std(tmp)
-            # if FHS too short, pad with zeros, else cut off end
             X_recording[seg, :] = tmp
+            # check if should be taking current_name[0], check concatenation
             names_seg.append(current_name[0] + '_' + str(seg).zfill(3))
 
             start_idx += n_samples
             end_idx += n_samples
+
+        # recording too short, pad with zeros
+        if n_segs == 0:
+            X_recording = np.ndarray((1, n_samples))
+            tmp = X[i]
+            tmp = (tmp - np.mean(tmp)) / np.std(tmp)
+            N = n_samples - len(tmp)
+            X_recording[0, :] = np.concatenate([tmp, np.zeros(N)])
+            names_seg.append(current_name[0] + '_' + str(seg).zfill(3))
 
         # append segmented recordings and labels
         X_seg.append(X_recording)
@@ -328,14 +332,72 @@ def split_data(data_folder, train_folder, val_folder):
                          stratify=labels)
 
     # get all files matching ids_train and move to train folder (glob and shutils)
+    os.makedirs(train_folder, exist_ok=True)
+    os.makedirs(val_folder, exist_ok=True)
+
     for pt_id in ids_train:
-        os.makedirs(train_folder, exist_ok=True)
         tmp = data_folder + pt_id + '*'
         for file in glob.glob(tmp):
             shutil.copy(file, train_folder)
 
     for pt_id in ids_val:
-        os.makedirs(val_folder, exist_ok=True)
         tmp = data_folder + pt_id + '*'
         for file in glob.glob(tmp):
-            shutil.copy(file, train_folder)
+            shutil.copy(file, val_folder)
+
+
+def get_features(data, recordings):
+    # Extract the age group and replace with the (approximate) number of months for the middle of the age group.
+    age_group = get_age(data)
+
+    if compare_strings(age_group, 'Neonate'):
+        age = 0.5
+    elif compare_strings(age_group, 'Infant'):
+        age = 6
+    elif compare_strings(age_group, 'Child'):
+        age = 6 * 12
+    elif compare_strings(age_group, 'Adolescent'):
+        age = 15 * 12
+    elif compare_strings(age_group, 'Young Adult'):
+        age = 20 * 12
+    else:
+        age = float('nan')
+
+    # Extract sex. Use one-hot encoding.
+    sex = get_sex(data)
+
+    sex_features = np.zeros(2, dtype=int)
+    if compare_strings(sex, 'Female'):
+        sex_features[0] = 1
+    elif compare_strings(sex, 'Male'):
+        sex_features[1] = 1
+
+    # Extract height and weight.
+    height = get_height(data)
+    weight = get_weight(data)
+
+    # Extract pregnancy status.
+    is_pregnant = get_pregnancy_status(data)
+
+    # Extract recording locations and data. Identify when a location is present, and compute the mean, variance, and skewness of
+    # each recording. If there are multiple recordings for one location, then extract features from the last recording.
+    locations = get_locations(data)
+
+    recording_locations = ['AV', 'MV', 'PV', 'TV', 'PhC']
+    num_recording_locations = len(recording_locations)
+    recording_features = np.zeros((num_recording_locations, 4), dtype=float)
+    num_locations = len(locations)
+    num_recordings = len(recordings)
+    if num_locations==num_recordings:
+        for i in range(num_locations):
+            for j in range(num_recording_locations):
+                if compare_strings(locations[i], recording_locations[j]) and np.size(recordings[i])>0:
+                    recording_features[j, 0] = 1
+                    recording_features[j, 1] = np.mean(recordings[i])
+                    recording_features[j, 2] = np.var(recordings[i])
+                    recording_features[j, 3] = sp.stats.skew(recordings[i])
+    recording_features = recording_features.flatten()
+
+    features = np.hstack(([age], sex_features, [height], [weight], [is_pregnant], recording_features))
+
+    return np.asarray(features, dtype=np.float32)

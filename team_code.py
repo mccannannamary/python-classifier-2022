@@ -11,7 +11,7 @@
 import preprocess_utils
 import test_data_utils
 from helper_code import *
-import numpy as np, scipy as sp, scipy.stats, os, shutil, sys, joblib
+import numpy as np, scipy as sp, scipy.stats, os, shutil, joblib
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -22,8 +22,6 @@ from skorch.helper import predefined_split
 from skorch.callbacks import LRScheduler
 from skorch.callbacks import Checkpoint
 from pretrain_model_utils import ResNet18
-from sklearn.impute import SimpleImputer
-from sklearn.ensemble import RandomForestClassifier
 
 
 ################################################################################
@@ -35,8 +33,8 @@ from sklearn.ensemble import RandomForestClassifier
 # Train your model.
 def train_challenge_model(data_folder, model_folder, verbose):
 
-    split_dataset = True
-    create_dataset = False
+    split_dataset = False
+    create_dataset = True
 
     pretrained_model_folder = './pretrain_resnet_unfreeze/'
 
@@ -46,7 +44,9 @@ def train_challenge_model(data_folder, model_folder, verbose):
         preprocess_utils.split_data(data_folder, train_folder, val_folder)
 
     data_folders = [train_folder, val_folder]
-    image_folders = ['../datasets/circor_img_seg/train/', '../datasets/circor_img_seg/val/']
+    image_folders = ['../datasets/circor_img/train/',
+                     '../datasets/circor_img/val/']
+
     if create_dataset:
         for i, data_folder in enumerate(data_folders):
 
@@ -54,10 +54,12 @@ def train_challenge_model(data_folder, model_folder, verbose):
             if verbose >= 1:
                 print('Finding data files...')
 
-            recordings, features, labels, rec_names, pt_ids = preprocess_utils.get_challenge_data(data_folder, verbose, fs_resample=1000, fs=4000)
+            recordings, features, labels, rec_names = \
+                preprocess_utils.get_challenge_data(data_folder, verbose, fs_resample=1000, fs=4000)
 
             # now perform segmentation
-            X_seg, y_seg, names_seg = preprocess_utils.segment_challenge_data(recordings, labels, rec_names)
+            X_seg, y_seg, names_seg = \
+                preprocess_utils.segment_challenge_data(recordings, labels, rec_names)
 
             # now create and save a CWT image for each PCG segment
             preprocess_utils.create_cwt_images(X_seg, y_seg, names_seg, image_folders[i])
@@ -127,20 +129,6 @@ def train_challenge_model(data_folder, model_folder, verbose):
     net.module.model.fc = nn.Linear(in_features=n_in_features, out_features=3)
 
     net.fit(train_set, y=None)
-
-    # # Train ensemble classifier.
-    # if verbose >= 1:
-    #     print('Training ensemble classifier...')
-    #
-    # # Define parameters for random forest classifier.
-    # n_estimators = 10  # Number of trees in the forest.
-    # max_leaf_nodes = 100  # Maximum number of leaf nodes in each tree.
-    # random_state = 123  # Random state; set for reproducibility.
-    #
-    # imputer = SimpleImputer().fit(features)
-    # features = imputer.transform(features)
-    # ensemble_classifier = RandomForestClassifier(n_estimators=n_estimators, max_leaf_nodes=max_leaf_nodes,
-    #                                     random_state=random_state).fit(features, labels)
 
     # Create a folder for the model if it does not already exist.
     os.makedirs(model_folder, exist_ok=True)

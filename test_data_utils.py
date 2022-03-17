@@ -1,7 +1,6 @@
 from helper_code import *
 import numpy as np
 import preprocess_utils
-from team_code import get_features
 from preprocess_utils import preprocess
 from matplotlib import cm
 from PIL import Image
@@ -72,10 +71,19 @@ def segment_test_data(X):
         for seg in range(n_segs):
             tmp = X[i][start_idx:end_idx]
             tmp = (tmp - np.mean(tmp)) / np.std(tmp)
+            # check concatenation
             X_recording[seg, :] = tmp
 
             start_idx += n_samples
             end_idx += n_samples
+
+        # recording too short, pad with zeros
+        if n_segs == 0:
+            X_recording = np.ndarray((1, n_samples))
+            tmp = X[i]
+            tmp = (tmp - np.mean(tmp)) / np.std(tmp)
+            N = n_samples - len(tmp)
+            X_recording[0, :] = np.concatenate([tmp, np.zeros(N)])
 
         # append segmented recordings
         X_seg.append(X_recording)
