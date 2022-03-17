@@ -35,15 +35,18 @@ from sklearn.ensemble import RandomForestClassifier
 # Train your model.
 def train_challenge_model(data_folder, model_folder, verbose):
 
+    split_dataset = True
     create_dataset = False
 
     pretrained_model_folder = './pretrain_resnet_unfreeze/'
-    # pretrained_model_folder = './pretrain_seg_alexnet_unfreeze/'
 
-    data_folders = [data_folder, '../datasets/circor/val/']
+    train_folder = '../datasets/circor/train/'
+    val_folder = '../datasets/circor/val/'
+    if split_dataset:
+        preprocess_utils.split_data(data_folder, train_folder, val_folder)
+
+    data_folders = [train_folder, val_folder]
     image_folders = ['../datasets/circor_img_seg/train/', '../datasets/circor_img_seg/val/']
-    pt_ids_names = ['pt_ids_train', 'pt_ids_val']
-
     if create_dataset:
         for i, data_folder in enumerate(data_folders):
 
@@ -55,12 +58,6 @@ def train_challenge_model(data_folder, model_folder, verbose):
 
             # now perform segmentation
             X_seg, y_seg, names_seg = preprocess_utils.segment_challenge_data(recordings, labels, rec_names)
-
-            # save patient ids
-            im_dir = '../datasets/circor_img_seg/'
-            os.makedirs(im_dir, exist_ok=True)
-            fname = os.path.join(im_dir, pt_ids_names[i])
-            np.save(fname, pt_ids)
 
             # now create and save a CWT image for each PCG segment
             preprocess_utils.create_cwt_images(X_seg, y_seg, names_seg, image_folders[i])
@@ -91,7 +88,7 @@ def train_challenge_model(data_folder, model_folder, verbose):
     # Create a torch.device() which should be the GPU if CUDA is available
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    neural_net = NeuralNetClassifier(
+    net = NeuralNetClassifier(
         module=ResNet18(n_classes=2),
         criterion=nn.CrossEntropyLoss,
         lr=0.001,
@@ -120,37 +117,38 @@ def train_challenge_model(data_folder, model_folder, verbose):
     )
 
     # initialize neural network
-    neural_net.initialize()
+    net.initialize()
     # load parameters from pretrained model
     param_fname = os.path.join(pretrained_model_folder, 'model.pkl')
-    neural_net.load_params(f_params=param_fname)
+    net.load_params(f_params=param_fname)
 
     # change number of classes in classification layer
-    n_in_features = neural_net.module.model.fc.in_features
-    neural_net.module.model.fc = nn.Linear(in_features=n_in_features, out_features=3)
+    n_in_features = net.module.model.fc.in_features
+    net.module.model.fc = nn.Linear(in_features=n_in_features, out_features=3)
 
-    neural_net.fit(train_set, y=None)
+    net.fit(train_set, y=None)
 
-    # Train ensemble classifier.
-    if verbose >= 1:
-        print('Training ensemble classifier...')
-
-    # Define parameters for random forest classifier.
-    n_estimators = 10  # Number of trees in the forest.
-    max_leaf_nodes = 100  # Maximum number of leaf nodes in each tree.
-    random_state = 123  # Random state; set for reproducibility.
-
-    imputer = SimpleImputer().fit(features)
-    features = imputer.transform(features)
-    ensemble_classifier = RandomForestClassifier(n_estimators=n_estimators, max_leaf_nodes=max_leaf_nodes,
-                                        random_state=random_state).fit(features, labels)
+    # # Train ensemble classifier.
+    # if verbose >= 1:
+    #     print('Training ensemble classifier...')
+    #
+    # # Define parameters for random forest classifier.
+    # n_estimators = 10  # Number of trees in the forest.
+    # max_leaf_nodes = 100  # Maximum number of leaf nodes in each tree.
+    # random_state = 123  # Random state; set for reproducibility.
+    #
+    # imputer = SimpleImputer().fit(features)
+    # features = imputer.transform(features)
+    # ensemble_classifier = RandomForestClassifier(n_estimators=n_estimators, max_leaf_nodes=max_leaf_nodes,
+    #                                     random_state=random_state).fit(features, labels)
 
     # Create a folder for the model if it does not already exist.
     os.makedirs(model_folder, exist_ok=True)
 
     # Save the model.
     classes = ['absent', 'present', 'unknown']
-    save_challenge_model(model_folder, classes, neural_net, ensemble_classifier)
+    # save_challenge_model(model_folder, classes, net, ensemble_classifier, imputer)
+    save_challenge_model(model_folder, classes, net)
 
     if verbose >= 1:
         print('Done.')
@@ -166,7 +164,7 @@ def load_challenge_model(model_folder, verbose):
 def run_challenge_model(model, data, recordings, verbose):
 
     classes = model['classes']
-    neural_net = model['classifier']
+    net = model['net']
 
     if verbose:
         print('Running neural network...')
@@ -200,16 +198,17 @@ def run_challenge_model(model, data, recordings, verbose):
 
     # run each image through model
     #img_probabilities = classifier.predict_proba(img_t)
-    img_probabilities = neural_net.predict_proba(test_set)
+    img_probabilities = net.predict_proba(test_set)
     probabilities = np.mean(img_probabilities, axis=0)
 
     # Choose label with higher probability.
-    nn_labels = np.zeros(len(classes), dtype=np.int_)
+    labels = np.zeros(len(classes), dtype=np.int_)
+    # get "present" index, if prob > 0.4 classify as present
     if probabilities[1] > 0.4:
         idx = 1
     else:
         idx = np.argmax(probabilities)
-    nn_labels[idx] = 1
+    labels[idx] = 1
 
     # Clean up tmp_image_folder
     for filename in os.listdir(tmp_image_folder):
@@ -222,33 +221,30 @@ def run_challenge_model(model, data, recordings, verbose):
         except Exception as e:
             print('Failed to delete %s. Reason: %s' % (file_path, e))
 
-    if verbose:
-        print('Running ensemble classifier...')
-
-    imputer = model['imputer']
-    ensemble_classifier = model['ensemble_classifier']
-
-    # Load features.
-    features = get_features(data, recordings)
-
-    # Impute missing data.
-    features = features.reshape(1, -1)
-    features = imputer.transform(features)
-
-    # Get classifier probabilities.
-    probabilities = ensemble_classifier.predict_proba(features)
-    probabilities = np.asarray(probabilities, dtype=np.float32)[:, 0, 1]
-
-    # Choose label with higher probability.
-    ensemble_labels = np.zeros(len(classes), dtype=np.int_)
-    if probabilities[1] > 0.4:
-        idx = 1
-    else:
-        idx = np.argmax(probabilities)
-    ensemble_labels[idx] = 1
-
-    labels = np.zeros(len(classes), dtype=np.int_)
-    # find final way to combine the two
+    # if verbose:
+    #     print('Running ensemble classifier...')
+    #
+    # imputer = model['imputer']
+    # ensemble_classifier = model['ensemble_classifier']
+    #
+    # # Load features.
+    # features = get_features(data, recordings)
+    #
+    # # Impute missing data.
+    # features = features.reshape(1, -1)
+    # features = imputer.transform(features)
+    #
+    # # Get classifier probabilities.
+    # probabilities = ensemble_classifier.predict_proba(features)
+    # probabilities = np.asarray(probabilities, dtype=np.float32)[:, 0, 1]
+    #
+    # # Choose label with higher probability.
+    # ensemble_labels = np.zeros(len(classes), dtype=np.int_)
+    # if probabilities[1] > 0.4:
+    #     idx = 1
+    # else:
+    #     idx = np.argmax(probabilities)
+    # ensemble_labels[idx] = 1
 
     return classes, labels, probabilities
 
@@ -260,8 +256,8 @@ def run_challenge_model(model, data, recordings, verbose):
 ################################################################################
 
 # Save your trained model.
-def save_challenge_model(model_folder, classes, neural_net, ensemble_classifier):
-    d = {'classes': classes, 'neural_net': neural_net, 'ensemble_classifier': ensemble_classifier}
+def save_challenge_model(model_folder, classes, net):
+    d = {'classes': classes, 'net': net}
     filename = os.path.join(model_folder, 'model.sav')
     joblib.dump(d, filename, protocol=0)
 
