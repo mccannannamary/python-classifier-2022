@@ -21,20 +21,30 @@ def evaluate_pretrain_model(input_dir, model_dir):
     fname = os.path.join(idx_dir, 'idx_test.npy')
     idx_val = np.load(fname)
 
-    transform = transforms.Compose([
-        transforms.RandomResizedCrop(224),
-        transforms.RandomHorizontalFlip(),
-        transforms.ToTensor(),
-        transforms.Normalize(
-            (0.485, 0.456, 0.406),
-            (0.229, 0.224, 0.225))
-    ])
+    data_transforms = {
+        'train': transforms.Compose([
+            transforms.RandomResizedCrop(224),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        ]),
+        'val': transforms.Compose([
+            transforms.Resize(256),
+            transforms.CenterCrop(224),
+            transforms.ToTensor(),
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        ]),
+    }
 
-    train_set = datasets.ImageFolder(root=train_dir, transform=transform)
-    valid_set = ImageFolderWithNames(root=val_dir, transform=transform)
+    train_set = datasets.ImageFolder(root=train_dir, transform=data_transforms['train'])
+    valid_set = ImageFolderWithNames(root=val_dir, transform=data_transforms['val'])
 
-    model = load_challenge_model(model_dir, 1)
-    model = model['classifier']
+    # model = load_challenge_model(model_dir, 1)
+    # model = model['classifier']
+
+    fname = os.path.join(model_dir,'resnet_pretrain.pkl')
+    with open(fname, 'rb') as f:
+        model = pickle.load(f)
 
     # train stats
     preds = model.predict(train_set)
@@ -48,24 +58,24 @@ def evaluate_pretrain_model(input_dir, model_dir):
     acc_v, sens_v, spec_v = get_stats(preds, targets)
 
     # combine predictions for FHS pictures from same patient
-    pt_preds = list()
-    pt_targets = list()
-    val_pts = np.unique(idx_val)
-    img_names = [valid_set.get_name(i) for i in range(len(valid_set))]
-    for pt in val_pts:
-        idx = [i for i, s in enumerate(img_names) if pt in s]
-        pt_targets.append(targets[idx][0])  # all targets are same for single patient, take first one
-        pt_pred_proba = pred_proba[idx]
-        pt_pred = preds[idx]
-        pt_preds.append(round(np.mean(pt_pred)))
-
-    pt_preds = np.vstack(pt_preds)
-    pt_targets = np.vstack(pt_targets)
-    acc_p, sens_p, spec_p = get_stats(pt_preds, pt_targets)
+    # pt_preds = list()
+    # pt_targets = list()
+    # val_pts = np.unique(idx_val)
+    # img_names = [valid_set.get_name(i) for i in range(len(valid_set))]
+    # for pt in val_pts:
+    #     idx = [i for i, s in enumerate(img_names) if pt in s]
+    #     pt_targets.append(targets[idx][0])  # all targets are same for single patient, take first one
+    #     pt_pred_proba = pred_proba[idx]
+    #     pt_pred = preds[idx]
+    #     pt_preds.append(round(np.mean(pt_pred)))
+    #
+    # pt_preds = np.vstack(pt_preds)
+    # pt_targets = np.vstack(pt_targets)
+    # acc_p, sens_p, spec_p = get_stats(pt_preds, pt_targets)
 
     print(f'Train stats:\n   Accuracy: {acc_t:.4f}, Sensitivity: {sens_t:.4f}, Specificity: {spec_t:.4f}')
     print(f'Validation stats:\n   Accuracy: {acc_v:.4f}, Sensitivity: {sens_v:.4f}, Specificity: {spec_v:.4f}')
-    print(f'Patient stats:\n   Accuracy: {acc_p:.4f}, Sensitivity: {sens_p:.4f}, Specificity: {spec_p:.4f}')
+    # print(f'Patient stats:\n   Accuracy: {acc_p:.4f}, Sensitivity: {sens_p:.4f}, Specificity: {spec_p:.4f}')
 
 def get_stats(preds, targets):
     # accuracy

@@ -11,7 +11,7 @@
 import preprocess_utils
 import test_data_utils
 from helper_code import *
-import numpy as np, scipy as sp, scipy.stats, os, sys, joblib
+import numpy as np, scipy as sp, scipy.stats, os, shutil, sys, joblib
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -21,8 +21,7 @@ from skorch import NeuralNetClassifier
 from skorch.helper import predefined_split
 from skorch.callbacks import LRScheduler
 from skorch.callbacks import Checkpoint
-from pretrain_model_utils import AlexNet
-from pretrain_model_utils import ImageFolderWithNames
+from pretrain_model_utils import ResNet18
 
 
 ################################################################################
@@ -34,9 +33,10 @@ from pretrain_model_utils import ImageFolderWithNames
 # Train your model.
 def train_challenge_model(data_folder, model_folder, verbose):
 
-    create_dataset = True
+    create_dataset = False
 
-    pretrained_model_folder = './pretrain_seg_alexnet/'
+    pretrained_model_folder = './pretrain_resnet_unfreeze/'
+    # pretrained_model_folder = './pretrain_seg_alexnet_unfreeze/'
 
     data_folders = [data_folder, '../datasets/circor/val/']
     image_folders = ['../datasets/circor_img_seg/train/', '../datasets/circor_img_seg/val/']
@@ -67,51 +67,91 @@ def train_challenge_model(data_folder, model_folder, verbose):
     if verbose >= 1:
         print('Training model...')
 
-    transform = transforms.Compose([
-        transforms.RandomResizedCrop(224),
-        transforms.RandomHorizontalFlip(),
-        transforms.ToTensor(),
-        transforms.Normalize(
-            (0.485, 0.456, 0.406),
-            (0.229, 0.224, 0.225))
-    ])
+    data_transforms = {
+        'train': transforms.Compose([
+            transforms.RandomResizedCrop(224),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        ]),
+        'val': transforms.Compose([
+            transforms.Resize(256),
+            transforms.CenterCrop(224),
+            transforms.ToTensor(),
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        ]),
+    }
 
-    train_set = datasets.ImageFolder(root=image_folders[0], transform=transform)
-    valid_set = datasets.ImageFolder(root=image_folders[1], transform=transform)
+    train_set = datasets.ImageFolder(root=image_folders[0], transform=data_transforms['train'])
+    valid_set = datasets.ImageFolder(root=image_folders[1], transform=data_transforms['val'])
 
     # Create a torch.device() which should be the GPU if CUDA is available
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    lr = 0.001
-    batch_size = 15
     # classifier = NeuralNetClassifier(
-    #     module=AlexNet(n_hidden_units=256, n_classes=3),
+    #     module=AlexNet(n_hidden_units=256, n_classes=2),
     #     criterion=nn.CrossEntropyLoss,
     #     lr=0.001,
-    #     batch_size=batch_size,
+    #     batch_size=64,
     #     max_epochs=15,
     #     optimizer=optim.SGD,
     #     optimizer__momentum=0.9,
     #     optimizer__nesterov=False,
-    #     optimizer__weight_decay=0.01,
-    #     train_split=predefined_split(valid_set),
+    #     optimizer__weight_decay=0.001,
     #     iterator_train__shuffle=True,
     #     iterator_train__num_workers=8,
     #     iterator_valid__shuffle=False,
     #     iterator_valid__num_workers=8,
+    #     train_split=predefined_split(valid_set),
     #     callbacks=[
     #         ('lr_scheduler',
-    #          LRScheduler(policy='ReduceLROnPlateau')),
+    #          LRScheduler(policy='ReduceLROnPlateau', factor=0.1, patience=3)),
     #         ('checkpoint',
     #          Checkpoint(dirname=model_folder,
     #                     monitor='valid_acc_best',
     #                     f_pickle='best_model.pkl'))
     #     ],
     #     device=device
-    # ).fit(train_set, y=None)
+    # )
 
-    model = load_challenge_model(pretrained_model_folder, verbose)
-    classifier = model['classifier']
+    classifier = NeuralNetClassifier(
+        module=ResNet18(n_classes=3),
+        criterion=nn.CrossEntropyLoss,
+        lr=0.001,
+        batch_size=4,
+        max_epochs=30,
+        optimizer=optim.SGD,
+        optimizer__momentum=0.9,
+        optimizer__weight_decay=0.0005,
+        train_split=predefined_split(valid_set),
+        iterator_train__shuffle=True,
+        iterator_train__num_workers=8,
+        iterator_valid__shuffle=False,
+        iterator_valid__num_workers=8,
+        callbacks=[
+            ('lr_scheduler',
+             LRScheduler(policy='StepLR', step_size=7, gamma=0.1)),
+            ('checkpoint',
+             Checkpoint(dirname=model_folder,
+                        monitor='valid_acc_best',
+                        f_params='model.pkl',
+                        f_optimizer='opt.pkl',
+                        f_criterion='criterion.pkl',
+                        f_history='history.json')),
+        ],
+        device=device
+    )
+
+    #classifier.initialize()
+    #param_fname = os.path.join(pretrained_model_folder, 'model.pkl')
+    #classifier.load_params(f_params=param_fname)
+
+    # Alexnet, need to modify number of classes in final layer
+    # classifier.module.model.classifier[6] = nn.Linear(in_features=256, out_features=3)
+
+    # Resnet
+    #n_in_features = classifier.module.model.fc.in_features
+    #classifier.module.model.fc = nn.Linear(in_features=n_in_features, out_features=3)
 
     classifier.fit(train_set, y=None)
 
@@ -138,38 +178,55 @@ def run_challenge_model(model, data, recordings, verbose):
     classes = model['classes']
     classifier = model['classifier']
 
-    np.seterr(all='raise')
+    tmp_image_folder = '../datasets/circor_img_seg/test/'
+    os.makedirs(tmp_image_folder, exist_ok=True)
 
     # need to do whole process of filtering, segmenting, and getting FHS images here
     X_seg = test_data_utils.segment_data(recordings)
+    y_seg = np.zeros((len(X_seg), 3))
+    names_seg = [f'test_{i}' for i in range(0, len(X_seg))]
 
     # create CWT image for each segmented FHS - need to figure out how to
     # return array of images, or else create a directory with the images
     # and load one by one (but should be able to store array of images)
-    test_imgs = test_data_utils.create_cwt_images(X_seg)
+    # test_imgs = test_data_utils.create_cwt_images(X_seg)
+    # now create and save a CWT image for each segmented FHS
+    preprocess_utils.create_cwt_images(X_seg, y_seg, names_seg, tmp_image_folder)
 
     transform = transforms.Compose([
-        transforms.RandomResizedCrop(224),
-        transforms.RandomHorizontalFlip(),
-        transforms.ToTensor(),
-        transforms.Normalize(
-            (0.485, 0.456, 0.406),
-            (0.229, 0.224, 0.225))
+            transforms.Resize(256),
+            transforms.CenterCrop(224),
+            transforms.ToTensor(),
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
     ])
 
-    img_t = list()
-    for img in test_imgs:
-        img_t.append(transform(img).unsqueeze(0))
-    img_t = torch.vstack(img_t)
+    test_set = datasets.ImageFolder(root=tmp_image_folder, transform=transform)
+
+    # img_t = list()
+    # for img in test_imgs:
+    #     img_t.append(transform(img).unsqueeze(0))
+    # img_t = torch.vstack(img_t)
 
     # run each image through model
-    img_probabilities = classifier.predict_proba(img_t)
+    #img_probabilities = classifier.predict_proba(img_t)
+    img_probabilities = classifier.predict_proba(test_set)
     probabilities = np.mean(img_probabilities, axis=0)
 
     # Choose label with higher probability.
     labels = np.zeros(len(classes), dtype=np.int_)
     idx = np.argmax(probabilities)
     labels[idx] = 1
+
+    # Clean up tmp_image_folder
+    for filename in os.listdir(tmp_image_folder):
+        file_path = os.path.join(tmp_image_folder, filename)
+        try:
+            if os.path.isfile(file_path) or os.path.islink(file_path):
+                os.unlink(file_path)
+            elif os.path.isdir(file_path):
+                shutil.rmtree(file_path)
+        except Exception as e:
+            print('Failed to delete %s. Reason: %s' % (file_path, e))
 
     return classes, labels, probabilities
 

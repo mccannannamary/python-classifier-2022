@@ -21,7 +21,6 @@ def pretrain_challenge_model(data_folder, model_folder):
 
     train_dir = os.path.join(data_folder, 'train')
     val_dir = os.path.join(data_folder, 'val')
-    batch_size = 4
 
     data_transforms = {
         'train': transforms.Compose([
@@ -44,11 +43,11 @@ def pretrain_challenge_model(data_folder, model_folder):
     # Create a torch.device() which should be the GPU if CUDA is available
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    model = NeuralNetClassifier(
+    classifier = NeuralNetClassifier(
         module=ResNet18(n_classes=2),
         criterion=nn.CrossEntropyLoss,
         lr=0.001,
-        batch_size=batch_size,
+        batch_size=4,
         max_epochs=15,
         optimizer=optim.SGD,
         optimizer__momentum=0.9,
@@ -64,13 +63,41 @@ def pretrain_challenge_model(data_folder, model_folder):
             ('checkpoint',
              Checkpoint(dirname=model_folder,
                         monitor='valid_acc_best',
-                        f_pickle='resnet_pretrain.pkl'))
+                        f_params='model.pkl',
+                        f_optimizer='opt.pkl',
+                        f_criterion='criterion.pkl',
+                        f_history='history.json')),
         ],
         device=device
     ).fit(train_set, y=None)
 
-    classes = ['absent', 'present', 'unknown']
-    save_pretrain_model(model_folder, classes, model)
+    # classifier = NeuralNetClassifier(
+    #     module=AlexNet(n_classes=2, n_hidden_units=256),
+    #     criterion=nn.CrossEntropyLoss,
+    #     lr=0.001,
+    #     batch_size=64,
+    #     max_epochs=15,
+    #     optimizer=optim.SGD,
+    #     optimizer__momentum=0.9,
+    #     optimizer__weight_decay=0.001,
+    #     train_split=predefined_split(valid_set),
+    #     iterator_train__shuffle=True,
+    #     iterator_train__num_workers=8,
+    #     iterator_valid__shuffle=False,
+    #     iterator_valid__num_workers=8,
+    #     callbacks=[
+    #         ('lr_scheduler',
+    #          LRScheduler(policy='ReduceLROnPlateau', factor=0.1, patience=3)),
+    #         ('checkpoint',
+    #          Checkpoint(dirname=model_folder,
+    #                     monitor='valid_acc_best',
+    #                     f_params='model.pkl',
+    #                     f_optimizer='opt.pkl',
+    #                     f_criterion='criterion.pkl',
+    #                     f_history='history.json')),
+    #     ],
+    #     device=device
+    # ).fit(train_set, y=None)
 
 ###########################################################################
 
