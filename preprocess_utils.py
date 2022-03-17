@@ -146,7 +146,9 @@ def get_challenge_data(data_folder, verbose, fs_resample=1000, fs=4000):
     recordings = list()
     features = list()
     labels = list()
+    relabels = list()
     rec_names = list()
+    rec_names_list = list()
 
     for i in range(n_patient_files):
         # Load the current patient data and recordings.
@@ -156,6 +158,7 @@ def get_challenge_data(data_folder, verbose, fs_resample=1000, fs=4000):
         # get current recording names
         current_recording_names = load_recording_names(current_patient_data)
         rec_names.append(np.vstack(current_recording_names))
+        rec_names_list.append(current_recording_names)
 
         # Extract features
         current_features = get_features(current_patient_data, current_recordings)
@@ -175,14 +178,44 @@ def get_challenge_data(data_folder, verbose, fs_resample=1000, fs=4000):
             current_labels[j] = 1
         labels.append(np.tile(current_labels, (n_recordings, 1)))
 
-    rec_names = np.vstack(rec_names)
-    labels = np.vstack(labels)
+        if compare_strings(label, 'Present'):
+            murmur_locations = get_murmur_locations(current_patient_data)
+            if len(murmur_locations) != len(current_recordings):
+                # default 'Absent' label
+                current_labels = np.tile(np.array([0, 0, 1]), (n_recordings, 1))
+                # correct labels so that only those where murmur was heard are actually labeled as positive
+                for location in murmur_locations:
+                    idx = [k for k, s in enumerate(rec_names_list[i]) if location in s]
+                    current_labels[idx, :] = np.array([1, 0, 0])
+                relabels.append(current_labels)
+
+            else:
+                # Extract label for each recording using one-hot encoding
+                current_labels = np.zeros(n_classes, dtype=int)
+                label = get_label(current_patient_data)
+                if label in classes:
+                    j = classes.index(label)
+                    current_labels[j] = 1
+                relabels.append(np.tile(current_labels, (n_recordings, 1)))
+
+        else:
+            # Extract label for each recording using one-hot encoding
+            current_labels = np.zeros(n_classes, dtype=int)
+            label = get_label(current_patient_data)
+            if label in classes:
+                j = classes.index(label)
+                current_labels[j] = 1
+            relabels.append(np.tile(current_labels, (n_recordings, 1)))
+
     features = np.vstack(features)
+    labels = np.vstack(labels)
+    relabels = np.vstack(relabels)
+    rec_names = np.vstack(rec_names)
 
-    return recordings, features, labels, rec_names
+    return recordings, features, labels, relabels, rec_names
 
 
-def segment_challenge_data(X, y, rec_names):
+def segment_challenge_data(X, y, y_relabel, rec_names):
     fs = 1000
     seg_len = 7.5
 
@@ -191,6 +224,7 @@ def segment_challenge_data(X, y, rec_names):
 
     X_seg = list()
     y_seg = list()
+    y_seg_relabel = list()
     names_seg = list()
 
     for i in range(n_recordings):
@@ -223,18 +257,21 @@ def segment_challenge_data(X, y, rec_names):
             N = n_samples - len(tmp)
             X_recording[0, :] = np.concatenate([tmp, np.zeros(N)])
             names_seg.append(current_name[0] + '_' + str(seg).zfill(3))
+            n_segs += 1
 
         # append segmented recordings and labels
         X_seg.append(X_recording)
         y_seg.append(np.tile(y[i], (n_segs, 1)))
+        y_seg_relabel.append(np.tile(y_relabel[i], (n_segs, 1)))
 
     X_seg = np.vstack(X_seg)
     y_seg = np.vstack(y_seg)
+    y_seg_relabel = np.vstack(y_seg_relabel)
 
-    return X_seg, y_seg, names_seg
+    return X_seg, y_seg, y_seg_relabel, names_seg
 
 
-def create_cwt_images(X, y, name, jpg_dir):
+def create_cwt_images(X, y, y_relabel, name, jpg_dir, jpg_dir_relabel):
     fs = 1000
 
     n_samples = X.shape[0]
@@ -256,7 +293,10 @@ def create_cwt_images(X, y, name, jpg_dir):
 
         for idx, cf in enumerate(cfs):
             # save cf as image here
-            save_cfs_as_jpg(cf, y[batch_start + idx], name[batch_start + idx], im_dir=jpg_dir)
+            save_cfs_as_jpg(cf, y[batch_start+idx],
+                            y_relabel[batch_start+idx],
+                            name[batch_start+idx],
+                            im_dir=jpg_dir, im_dir_relabel=jpg_dir_relabel)
 
         batch_start += batch_size
         batch_end += batch_size
@@ -268,13 +308,17 @@ def create_cwt_images(X, y, name, jpg_dir):
 
     for idx, cf in enumerate(cfs):
         # jpg image
-        save_cfs_as_jpg(cf, y[batch_start + idx, :], name[batch_start + idx], im_dir=jpg_dir)
+        save_cfs_as_jpg(cf, y[batch_start+idx, :],
+                        y_relabel[batch_start+idx],
+                        name[batch_start+idx],
+                        im_dir=jpg_dir, im_dir_relabel=jpg_dir_relabel)
 
 
-def save_cfs_as_jpg(cfs, y, fname, im_dir):
+def save_cfs_as_jpg(cfs, y, y_relabel, fname, im_dir, im_dir_relabel):
     # extract label for saving
     classes = ['present', 'unknown', 'absent']
     label = classes[np.argmax(y)]
+    relabel = classes[np.argmax(y_relabel)]
 
     # rescale cfs to interval [0, 1]
     cfs = (cfs - cfs.min()) / (cfs.max() - cfs.min())
@@ -297,10 +341,18 @@ def save_cfs_as_jpg(cfs, y, fname, im_dir):
     # save image in appropriate class directory
     save_dir = os.path.join(im_dir, label)
     os.makedirs(save_dir, exist_ok=True)
-    fname = os.path.join(save_dir, fname)
-    img.save(fname + '.jpg')
+    tmp_fname = os.path.join(save_dir, fname)
+    img.save(tmp_fname + '.jpg')
 
-def split_data(data_folder, train_folder, val_folder):
+    # save image in appropriate class directory
+    save_dir = os.path.join(im_dir_relabel, relabel)
+    os.makedirs(save_dir, exist_ok=True)
+    tmp_fname = os.path.join(save_dir, fname)
+    img.save(tmp_fname + '.jpg')
+
+
+
+def split_data(data_folder, train_folder, val_folder, test_folder):
 
     patient_files = find_patient_files(data_folder)
     n_patient_files = len(patient_files)
@@ -331,9 +383,17 @@ def split_data(data_folder, train_folder, val_folder):
                          random_state=1,
                          stratify=labels)
 
+    ids_val, ids_test, labels_val, labels_test = \
+        train_test_split(ids_val,
+                         labels_val,
+                         test_size=0.5,
+                         random_state=1,
+                         stratify=labels_val)
+
     # get all files matching ids_train and move to train folder (glob and shutils)
     os.makedirs(train_folder, exist_ok=True)
     os.makedirs(val_folder, exist_ok=True)
+    os.makedirs(test_folder, exist_ok=True)
 
     for pt_id in ids_train:
         tmp = data_folder + pt_id + '*'
@@ -344,6 +404,11 @@ def split_data(data_folder, train_folder, val_folder):
         tmp = data_folder + pt_id + '*'
         for file in glob.glob(tmp):
             shutil.copy(file, val_folder)
+
+    for pt_id in ids_test:
+        tmp = data_folder + pt_id + '*'
+        for file in glob.glob(tmp):
+            shutil.copy(file, test_folder)
 
 
 def get_features(data, recordings):
@@ -401,3 +466,11 @@ def get_features(data, recordings):
     features = np.hstack(([age], sex_features, [height], [weight], [is_pregnant], recording_features))
 
     return np.asarray(features, dtype=np.float32)
+
+def get_murmur_locations(data):
+    for l in data.split('\n'):
+        if l.startswith('#Murmur locations:'):
+            murmur_locations = l.split(' ')[2]
+            murmur_locations = murmur_locations.split('+')
+
+    return murmur_locations

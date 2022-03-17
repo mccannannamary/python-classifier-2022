@@ -40,12 +40,15 @@ def train_challenge_model(data_folder, model_folder, verbose):
 
     train_folder = '../datasets/circor/train/'
     val_folder = '../datasets/circor/val/'
+    test_folder = '../datasets/circor/test/'
     if split_dataset:
-        preprocess_utils.split_data(data_folder, train_folder, val_folder)
+        preprocess_utils.split_data(data_folder, train_folder, val_folder, test_folder)
 
     data_folders = [train_folder, val_folder]
     image_folders = ['../datasets/circor_img/train/',
                      '../datasets/circor_img/val/']
+    image_relabel_folders = ['../datasets/circor_img_relabel/train/',
+                             '../datasets/circor_img_relabel/val/']
 
     if create_dataset:
         for i, data_folder in enumerate(data_folders):
@@ -54,15 +57,15 @@ def train_challenge_model(data_folder, model_folder, verbose):
             if verbose >= 1:
                 print('Finding data files...')
 
-            recordings, features, labels, rec_names = \
+            recordings, features, labels, relabels, rec_names = \
                 preprocess_utils.get_challenge_data(data_folder, verbose, fs_resample=1000, fs=4000)
 
             # now perform segmentation
-            X_seg, y_seg, names_seg = \
-                preprocess_utils.segment_challenge_data(recordings, labels, rec_names)
+            X, y, y_relabel, names_seg = \
+                preprocess_utils.segment_challenge_data(recordings, labels, relabels, rec_names)
 
             # now create and save a CWT image for each PCG segment
-            preprocess_utils.create_cwt_images(X_seg, y_seg, names_seg, image_folders[i])
+            preprocess_utils.create_cwt_images(X, y, y_relabel, names_seg, image_folders[i], image_relabel_folders[i])
 
     # Train neural net.
     if verbose >= 1:
@@ -164,7 +167,7 @@ def run_challenge_model(model, data, recordings, verbose):
     recordings, labels, rec_names, pt_ids = test_data_utils.get_test_data(data, recordings, verbose, fs_resample=1000, fs=4000)
 
     # segment test data
-    X_seg, y_seg, names_seg = preprocess_utils.segment_challenge_data(recordings, labels, rec_names)
+    X_seg, y_seg, names_seg = preprocess_utils.segment_challenge_data(recordings, labels, rec_names, )
 
     # create CWT image for each PCG segment
     # test_imgs = test_data_utils.create_cwt_images(X_seg)
