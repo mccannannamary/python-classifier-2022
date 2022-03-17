@@ -18,3 +18,4 @@ skorch==0.11.0
 tabulate==0.8.9 
 tqdm==4.62.3
 pandas
+timm

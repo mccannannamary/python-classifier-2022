@@ -22,6 +22,8 @@ from skorch.helper import predefined_split
 from skorch.callbacks import LRScheduler
 from skorch.callbacks import Checkpoint
 from pretrain_model_utils import ResNet18
+from sklearn.impute import SimpleImputer
+from sklearn.ensemble import RandomForestClassifier
 
 
 ################################################################################
@@ -49,7 +51,7 @@ def train_challenge_model(data_folder, model_folder, verbose):
             if verbose >= 1:
                 print('Finding data files...')
 
-            recordings, features, labels, rec_names, pt_ids = preprocess_utils.get_challenge_data(data_folder, verbose, fs_resample=1000, fs=2000)
+            recordings, features, labels, rec_names, pt_ids = preprocess_utils.get_challenge_data(data_folder, verbose, fs_resample=1000, fs=4000)
 
             # now perform segmentation
             X_seg, y_seg, names_seg = preprocess_utils.segment_challenge_data(recordings, labels, rec_names)
@@ -60,12 +62,12 @@ def train_challenge_model(data_folder, model_folder, verbose):
             fname = os.path.join(im_dir, pt_ids_names[i])
             np.save(fname, pt_ids)
 
-            # now create and save a CWT image for each segmented FHS
+            # now create and save a CWT image for each PCG segment
             preprocess_utils.create_cwt_images(X_seg, y_seg, names_seg, image_folders[i])
 
-    # Train the model.
+    # Train neural net.
     if verbose >= 1:
-        print('Training model...')
+        print('Training neural network...')
 
     data_transforms = {
         'train': transforms.Compose([
@@ -82,40 +84,15 @@ def train_challenge_model(data_folder, model_folder, verbose):
         ]),
     }
 
+    # create pytorch datasets from folders where we saved images
     train_set = datasets.ImageFolder(root=image_folders[0], transform=data_transforms['train'])
     valid_set = datasets.ImageFolder(root=image_folders[1], transform=data_transforms['val'])
 
     # Create a torch.device() which should be the GPU if CUDA is available
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    # classifier = NeuralNetClassifier(
-    #     module=AlexNet(n_hidden_units=256, n_classes=2),
-    #     criterion=nn.CrossEntropyLoss,
-    #     lr=0.001,
-    #     batch_size=64,
-    #     max_epochs=15,
-    #     optimizer=optim.SGD,
-    #     optimizer__momentum=0.9,
-    #     optimizer__nesterov=False,
-    #     optimizer__weight_decay=0.001,
-    #     iterator_train__shuffle=True,
-    #     iterator_train__num_workers=8,
-    #     iterator_valid__shuffle=False,
-    #     iterator_valid__num_workers=8,
-    #     train_split=predefined_split(valid_set),
-    #     callbacks=[
-    #         ('lr_scheduler',
-    #          LRScheduler(policy='ReduceLROnPlateau', factor=0.1, patience=3)),
-    #         ('checkpoint',
-    #          Checkpoint(dirname=model_folder,
-    #                     monitor='valid_acc_best',
-    #                     f_pickle='best_model.pkl'))
-    #     ],
-    #     device=device
-    # )
-
-    classifier = NeuralNetClassifier(
-        module=ResNet18(n_classes=3),
+    neural_net = NeuralNetClassifier(
+        module=ResNet18(n_classes=2),
         criterion=nn.CrossEntropyLoss,
         lr=0.001,
         batch_size=4,
@@ -142,25 +119,38 @@ def train_challenge_model(data_folder, model_folder, verbose):
         device=device
     )
 
-    #classifier.initialize()
-    #param_fname = os.path.join(pretrained_model_folder, 'model.pkl')
-    #classifier.load_params(f_params=param_fname)
+    # initialize neural network
+    neural_net.initialize()
+    # load parameters from pretrained model
+    param_fname = os.path.join(pretrained_model_folder, 'model.pkl')
+    neural_net.load_params(f_params=param_fname)
 
-    # Alexnet, need to modify number of classes in final layer
-    # classifier.module.model.classifier[6] = nn.Linear(in_features=256, out_features=3)
+    # change number of classes in classification layer
+    n_in_features = neural_net.module.model.fc.in_features
+    neural_net.module.model.fc = nn.Linear(in_features=n_in_features, out_features=3)
 
-    # Resnet
-    #n_in_features = classifier.module.model.fc.in_features
-    #classifier.module.model.fc = nn.Linear(in_features=n_in_features, out_features=3)
+    neural_net.fit(train_set, y=None)
 
-    classifier.fit(train_set, y=None)
+    # Train ensemble classifier.
+    if verbose >= 1:
+        print('Training ensemble classifier...')
+
+    # Define parameters for random forest classifier.
+    n_estimators = 10  # Number of trees in the forest.
+    max_leaf_nodes = 100  # Maximum number of leaf nodes in each tree.
+    random_state = 123  # Random state; set for reproducibility.
+
+    imputer = SimpleImputer().fit(features)
+    features = imputer.transform(features)
+    ensemble_classifier = RandomForestClassifier(n_estimators=n_estimators, max_leaf_nodes=max_leaf_nodes,
+                                        random_state=random_state).fit(features, labels)
 
     # Create a folder for the model if it does not already exist.
     os.makedirs(model_folder, exist_ok=True)
 
     # Save the model.
     classes = ['absent', 'present', 'unknown']
-    save_challenge_model(model_folder, classes, classifier)
+    save_challenge_model(model_folder, classes, neural_net, ensemble_classifier)
 
     if verbose >= 1:
         print('Done.')
@@ -176,21 +166,22 @@ def load_challenge_model(model_folder, verbose):
 def run_challenge_model(model, data, recordings, verbose):
 
     classes = model['classes']
-    classifier = model['classifier']
+    neural_net = model['classifier']
+
+    if verbose:
+        print('Running neural network...')
 
     tmp_image_folder = '../datasets/circor_img_seg/test/'
     os.makedirs(tmp_image_folder, exist_ok=True)
 
-    # need to do whole process of filtering, segmenting, and getting FHS images here
-    X_seg = test_data_utils.segment_data(recordings)
-    y_seg = np.zeros((len(X_seg), 3))
-    names_seg = [f'test_{i}' for i in range(0, len(X_seg))]
+    # preprocess test data
+    recordings, labels, rec_names, pt_ids = test_data_utils.get_test_data(data, recordings, verbose, fs_resample=1000, fs=4000)
 
-    # create CWT image for each segmented FHS - need to figure out how to
-    # return array of images, or else create a directory with the images
-    # and load one by one (but should be able to store array of images)
+    # segment test data
+    X_seg, y_seg, names_seg = preprocess_utils.segment_challenge_data(recordings, labels, rec_names)
+
+    # create CWT image for each PCG segment
     # test_imgs = test_data_utils.create_cwt_images(X_seg)
-    # now create and save a CWT image for each segmented FHS
     preprocess_utils.create_cwt_images(X_seg, y_seg, names_seg, tmp_image_folder)
 
     transform = transforms.Compose([
@@ -209,13 +200,16 @@ def run_challenge_model(model, data, recordings, verbose):
 
     # run each image through model
     #img_probabilities = classifier.predict_proba(img_t)
-    img_probabilities = classifier.predict_proba(test_set)
+    img_probabilities = neural_net.predict_proba(test_set)
     probabilities = np.mean(img_probabilities, axis=0)
 
     # Choose label with higher probability.
-    labels = np.zeros(len(classes), dtype=np.int_)
-    idx = np.argmax(probabilities)
-    labels[idx] = 1
+    nn_labels = np.zeros(len(classes), dtype=np.int_)
+    if probabilities[1] > 0.4:
+        idx = 1
+    else:
+        idx = np.argmax(probabilities)
+    nn_labels[idx] = 1
 
     # Clean up tmp_image_folder
     for filename in os.listdir(tmp_image_folder):
@@ -228,6 +222,34 @@ def run_challenge_model(model, data, recordings, verbose):
         except Exception as e:
             print('Failed to delete %s. Reason: %s' % (file_path, e))
 
+    if verbose:
+        print('Running ensemble classifier...')
+
+    imputer = model['imputer']
+    ensemble_classifier = model['ensemble_classifier']
+
+    # Load features.
+    features = get_features(data, recordings)
+
+    # Impute missing data.
+    features = features.reshape(1, -1)
+    features = imputer.transform(features)
+
+    # Get classifier probabilities.
+    probabilities = ensemble_classifier.predict_proba(features)
+    probabilities = np.asarray(probabilities, dtype=np.float32)[:, 0, 1]
+
+    # Choose label with higher probability.
+    ensemble_labels = np.zeros(len(classes), dtype=np.int_)
+    if probabilities[1] > 0.4:
+        idx = 1
+    else:
+        idx = np.argmax(probabilities)
+    ensemble_labels[idx] = 1
+
+    labels = np.zeros(len(classes), dtype=np.int_)
+    # find final way to combine the two
+
     return classes, labels, probabilities
 
 
@@ -238,8 +260,8 @@ def run_challenge_model(model, data, recordings, verbose):
 ################################################################################
 
 # Save your trained model.
-def save_challenge_model(model_folder, classes, classifier):
-    d = {'classes': classes, 'classifier': classifier}
+def save_challenge_model(model_folder, classes, neural_net, ensemble_classifier):
+    d = {'classes': classes, 'neural_net': neural_net, 'ensemble_classifier': ensemble_classifier}
     filename = os.path.join(model_folder, 'model.sav')
     joblib.dump(d, filename, protocol=0)
 

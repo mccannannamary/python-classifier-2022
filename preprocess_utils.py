@@ -1,14 +1,14 @@
 import pywt
 
 from helper_code import *
+from team_code import *
 import numpy as np
 from scipy import signal
-import hsmm_utils
 from matplotlib import cm
 from PIL import Image
 from wavelets_pytorch.transform import WaveletTransformTorch
-from sklearn.utils.random import sample_without_replacement
-
+from sklearn.model_selection import train_test_split
+import glob, shutil
 
 # Apply preprocessing steps to signal
 def preprocess(sig, fs_resample, fs):
@@ -117,46 +117,7 @@ def schmidt_spike_removal(sig,fs):
     return sig
 
 
-# Extract features from the data.
-def get_nn_features(data, recordings):
-    # Extract the age group and replace with the (approximate) number of months for the middle of the age group.
-    age_group = get_age(data)
-
-    if compare_strings(age_group, 'Neonate'):
-        age = 0.5
-    elif compare_strings(age_group, 'Infant'):
-        age = 6
-    elif compare_strings(age_group, 'Child'):
-        age = 6 * 12
-    elif compare_strings(age_group, 'Adolescent'):
-        age = 15 * 12
-    elif compare_strings(age_group, 'Young Adult'):
-        age = 20 * 12
-    else:
-        age = float('nan')
-
-    # Extract sex. Use one-hot encoding.
-    sex = get_sex(data)
-
-    sex_features = np.zeros(2, dtype=int)
-    if compare_strings(sex, 'Female'):
-        sex_features[0] = 1
-    elif compare_strings(sex, 'Male'):
-        sex_features[1] = 1
-
-    # Extract height and weight.
-    height = get_height(data)
-    weight = get_weight(data)
-
-    # Extract pregnancy status.
-    is_pregnant = get_pregnancy_status(data)
-
-    features = np.hstack(([age], sex_features, [height], [weight], [is_pregnant]))
-
-    return np.asarray(features, dtype=np.float32)
-
-
-def load_recording_names(data_folder, data):
+def load_recording_names(data):
     n_locations = get_num_locations(data)
     recording_information = data.split('\n')[1:n_locations + 1]
 
@@ -170,7 +131,7 @@ def load_recording_names(data_folder, data):
     return recording_names
 
 
-def get_challenge_data(data_folder, verbose, fs_resample=1000, fs=2000):
+def get_challenge_data(data_folder, verbose, fs_resample=1000, fs=4000):
     # Find the patient data files.
     patient_files = find_patient_files(data_folder)
     n_patient_files = len(patient_files)
@@ -189,7 +150,6 @@ def get_challenge_data(data_folder, verbose, fs_resample=1000, fs=2000):
     features = list()
     labels = list()
     rec_names = list()
-    pt_ids = list()
 
     for i in range(n_patient_files):
         # Load the current patient data and recordings.
@@ -197,15 +157,11 @@ def get_challenge_data(data_folder, verbose, fs_resample=1000, fs=2000):
         current_recordings = load_recordings(data_folder, current_patient_data)
 
         # get current recording names
-        current_recording_names = load_recording_names(data_folder, current_patient_data)
+        current_recording_names = load_recording_names(current_patient_data)
         rec_names.append(np.vstack(current_recording_names))
 
-        # get current patient id
-        pt_id = get_patient_id(current_patient_data)
-        pt_ids.append(pt_id)
-
-        # Extract clinical features
-        current_features = get_nn_features(current_patient_data, current_recordings)
+        # Extract features
+        current_features = get_features(current_patient_data, current_recordings)
         features.append(current_features)
 
         # append processed recording from each location for this patient
@@ -227,8 +183,9 @@ def get_challenge_data(data_folder, verbose, fs_resample=1000, fs=2000):
 
     rec_names = np.vstack(rec_names)
     labels = np.vstack(labels)
+    features = np.vstack(features)
 
-    return recordings, features, labels, rec_names, pt_ids
+    return recordings, features, labels, rec_names
 
 def segment_challenge_data(X, y, rec_names):
     fs = 1000
@@ -338,3 +295,47 @@ def save_cfs_as_jpg(cfs, y, fname, im_dir):
     os.makedirs(save_dir, exist_ok=True)
     fname = os.path.join(save_dir, fname)
     img.save(fname + '.jpg')
+
+def split_data(data_folder, train_folder, val_folder):
+
+    patient_files = find_patient_files(data_folder)
+    n_patient_files = len(patient_files)
+
+    classes = ['Present', 'Unknown', 'Absent']
+    n_classes = len(classes)
+
+    pt_ids = list()
+    labels = list()
+
+    for i in range(n_patient_files):
+        current_patient_data = load_patient_data(patient_files[i])
+        current_patient_id = current_patient_data.split('\n')[0].split(' ')[0]
+        pt_ids.append(current_patient_id)
+
+        current_labels = np.zeros(n_classes, dtype=int)
+        label = get_label(current_patient_data)
+        if label in classes:
+            j = classes.index(label)
+            current_labels[j] = 1
+        labels.append(current_labels)
+
+    # perform stratified random split by labels
+    ids_train, ids_val, labels_train, labels_val = \
+        train_test_split(pt_ids,
+                         labels,
+                         test_size=0.2,
+                         random_state=1,
+                         stratify=labels)
+
+    # get all files matching ids_train and move to train folder (glob and shutils)
+    for pt_id in ids_train:
+        os.makedirs(train_folder, exist_ok=True)
+        tmp = data_folder + pt_id + '*'
+        for file in glob.glob(tmp):
+            shutil.copy(file, train_folder)
+
+    for pt_id in ids_val:
+        os.makedirs(val_folder, exist_ok=True)
+        tmp = data_folder + pt_id + '*'
+        for file in glob.glob(tmp):
+            shutil.copy(file, train_folder)

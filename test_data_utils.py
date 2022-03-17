@@ -1,14 +1,56 @@
 from helper_code import *
 import numpy as np
-from plot_utils import plot_segmentations
 import preprocess_utils
-import hsmm_utils
+from team_code import get_features
+from preprocess_utils import preprocess
 from matplotlib import cm
-from matplotlib import pyplot as plt
 from PIL import Image
 from wavelets_pytorch.transform import WaveletTransformTorch
 
-def segment_data(X):
+def get_test_data(data, current_recordings, verbose, fs_resample=1000, fs=4000):
+
+    classes = ['Present', 'Unknown', 'Absent']
+    n_classes = len(classes)
+
+    # Extract the features and labels.
+    if verbose >= 1:
+        print('Extracting features and labels from the test data...')
+
+    processed_recordings = list()
+    labels = list()
+    rec_names = list()
+
+    # Load the current patient data and recordings.
+    current_patient_data = load_patient_data(data)
+
+    # get current recording names
+    current_recording_names = preprocess_utils.load_recording_names(current_patient_data)
+    rec_names.append(np.vstack(current_recording_names))
+
+    # append processed recording from each location for this patient
+    n_recordings = len(current_recordings)
+    for r in range(n_recordings):
+        recording = preprocess(current_recordings[r], fs_resample=fs_resample, fs=fs)
+        processed_recordings.append(recording)
+
+    # Get label for each recording - this is where should differ if I want to relabel
+    # for the different types of murmurs, or for depending on whether murmur heard at this
+    # location or not
+    # Extract labels and use one-hot encoding.
+    current_labels = np.zeros(n_classes, dtype=int)
+    label = get_label(current_patient_data)
+    if label in classes:
+        j = classes.index(label)
+        current_labels[j] = 1
+    labels.append(np.tile(current_labels, (n_recordings, 1)))
+
+    rec_names = np.vstack(rec_names)
+    labels = np.vstack(labels)
+
+    return processed_recordings, labels, rec_names
+
+
+def segment_test_data(X):
     fs = 1000
     seg_len = 7.5
 

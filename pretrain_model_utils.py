@@ -65,7 +65,7 @@ class ResNet18(nn.Module):
         #     param.requires_grad_(True)
 
         n_in_features = model.fc.in_features
-        model.fc = nn.Linear(in_features=n_in_features, out_features=2)
+        model.fc = nn.Linear(in_features=n_in_features, out_features=n_classes)
 
         self.model = model
 
