@@ -20,7 +20,7 @@ def get_test_data(data, current_recordings, verbose, fs_resample=1000, fs=4000):
     rec_names = list()
 
     # Load the current patient data and recordings.
-    current_patient_data = load_patient_data(data)
+    current_patient_data = data
 
     # get current recording names
     current_recording_names = preprocess_utils.load_recording_names(current_patient_data)

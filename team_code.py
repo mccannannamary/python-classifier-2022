@@ -12,6 +12,7 @@ import preprocess_utils
 import test_data_utils
 from helper_code import *
 import numpy as np, scipy as sp, scipy.stats, os, shutil, joblib
+import time
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -34,7 +35,7 @@ from pretrain_model_utils import ResNet18
 def train_challenge_model(data_folder, model_folder, verbose):
 
     split_dataset = False
-    create_dataset = True
+    create_dataset = False
 
     pretrained_model_folder = './pretrain_resnet_unfreeze/'
 
@@ -97,7 +98,7 @@ def train_challenge_model(data_folder, model_folder, verbose):
         module=ResNet18(n_classes=2),
         criterion=nn.CrossEntropyLoss,
         lr=0.001,
-        batch_size=4,
+        batch_size=8,
         max_epochs=30,
         optimizer=optim.SGD,
         optimizer__momentum=0.9,
@@ -109,7 +110,7 @@ def train_challenge_model(data_folder, model_folder, verbose):
         iterator_valid__num_workers=8,
         callbacks=[
             ('lr_scheduler',
-             LRScheduler(policy='StepLR', step_size=7, gamma=0.1)),
+             LRScheduler(policy='ReduceLROnPlateau', patience=3, factor=0.1)),
             ('checkpoint',
              Checkpoint(dirname=model_folder,
                         monitor='valid_acc_best',
@@ -164,14 +165,15 @@ def run_challenge_model(model, data, recordings, verbose):
     os.makedirs(tmp_image_folder, exist_ok=True)
 
     # preprocess test data
-    recordings, labels, rec_names, pt_ids = test_data_utils.get_test_data(data, recordings, verbose, fs_resample=1000, fs=4000)
+    recordings, labels, rec_names = test_data_utils.get_test_data(data, recordings, verbose, fs_resample=1000, fs=4000)
 
     # segment test data
-    X_seg, y_seg, names_seg = preprocess_utils.segment_challenge_data(recordings, labels, rec_names, )
+    X_seg, y_seg, y_seg_relabel, names_seg = preprocess_utils.segment_challenge_data(recordings, labels, labels, rec_names)
+
+    beg = time.perf_counter()
 
     # create CWT image for each PCG segment
-    # test_imgs = test_data_utils.create_cwt_images(X_seg)
-    preprocess_utils.create_cwt_images(X_seg, y_seg, names_seg, tmp_image_folder)
+    test_imgs = test_data_utils.create_cwt_images(X_seg)
 
     transform = transforms.Compose([
             transforms.Resize(256),
@@ -180,64 +182,70 @@ def run_challenge_model(model, data, recordings, verbose):
             transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
     ])
 
-    test_set = datasets.ImageFolder(root=tmp_image_folder, transform=transform)
-
-    # img_t = list()
-    # for img in test_imgs:
-    #     img_t.append(transform(img).unsqueeze(0))
-    # img_t = torch.vstack(img_t)
+    img_t = list()
+    for img in test_imgs:
+        img_t.append(transform(img).unsqueeze(0))
+    img_t = torch.vstack(img_t)
 
     # run each image through model
-    #img_probabilities = classifier.predict_proba(img_t)
-    img_probabilities = net.predict_proba(test_set)
-    probabilities = np.mean(img_probabilities, axis=0)
+    img_probabilities = net.predict_proba(img_t)
 
-    # Choose label with higher probability.
-    labels = np.zeros(len(classes), dtype=np.int_)
-    # get "present" index, if prob > 0.4 classify as present
-    if probabilities[1] > 0.4:
-        idx = 1
+    # decision rule: first check if any images are classified as unknown, if yes, then classify
+    # as unknown. If no, then move on to present. If no, then classify as absent.
+    biased_labels = np.zeros(len(classes), dtype=np.int_)
+    aggressive_labels = np.zeros(len(classes), dtype=np.int_)
+    abs_idx = classes.index('absent')
+    pres_idx = classes.index('present')
+    unknown_idx = classes.index('unknown')
+
+    max_unknown_prob = np.max(img_probabilities[:, unknown_idx])
+    max_pres_prob = np.max(img_probabilities[:, unknown_idx])
+    if max_unknown_prob > 0.2:
+        idx = unknown_idx
+    elif max_pres_prob > 0.2:
+        idx = pres_idx
     else:
-        idx = np.argmax(probabilities)
-    labels[idx] = 1
+        idx = abs_idx
+    aggressive_labels[idx] = 1
 
-    # Clean up tmp_image_folder
-    for filename in os.listdir(tmp_image_folder):
-        file_path = os.path.join(tmp_image_folder, filename)
-        try:
-            if os.path.isfile(file_path) or os.path.islink(file_path):
-                os.unlink(file_path)
-            elif os.path.isdir(file_path):
-                shutil.rmtree(file_path)
-        except Exception as e:
-            print('Failed to delete %s. Reason: %s' % (file_path, e))
+    if max_unknown_prob > 0.4:
+        idx = unknown_idx
+    elif max_pres_prob > 0.4:
+        idx = pres_idx
+    else:
+        idx = abs_idx
+    biased_labels[idx] = 1
 
-    # if verbose:
-    #     print('Running ensemble classifier...')
-    #
-    # imputer = model['imputer']
-    # ensemble_classifier = model['ensemble_classifier']
-    #
-    # # Load features.
-    # features = get_features(data, recordings)
-    #
-    # # Impute missing data.
-    # features = features.reshape(1, -1)
-    # features = imputer.transform(features)
-    #
-    # # Get classifier probabilities.
-    # probabilities = ensemble_classifier.predict_proba(features)
-    # probabilities = np.asarray(probabilities, dtype=np.float32)[:, 0, 1]
-    #
-    # # Choose label with higher probability.
-    # ensemble_labels = np.zeros(len(classes), dtype=np.int_)
-    # if probabilities[1] > 0.4:
-    #     idx = 1
-    # else:
-    #     idx = np.argmax(probabilities)
-    # ensemble_labels[idx] = 1
+    # Choose label with higher probability
+    mean_aggressive_labels = np.zeros(len(classes), dtype=np.int_)
+    probabilities = np.mean(img_probabilities, axis=0)
+    if probabilities[unknown_idx] > 0.15:
+        idx = unknown_idx
+    elif probabilities[pres_idx] > 0.15:
+        idx = pres_idx
+    else:
+        idx = abs_idx
+    mean_aggressive_labels[idx] = 1
 
-    return classes, labels, probabilities
+    # Choose label with higher probability, allowing for present class if greater than threshold
+    mean_biased_labels = np.zeros(len(classes), dtype=np.int_)
+    # get "present" index, if mean prob > 0.4 classify as present
+    if probabilities[unknown_idx] > 0.4:
+        idx = unknown_idx
+    elif probabilities[pres_idx] > 0.4:
+        idx = pres_idx
+    else:
+        idx = abs_idx
+    mean_biased_labels[idx] = 1
+
+    # Choose label with highest probability
+    mean_labels = np.zeros(len(classes), dtype=np.int_)
+    idx = np.argmax(probabilities)
+    mean_labels[idx] = 1
+
+    print(f"Running using images directly took {time.perf_counter() - beg:.2f} seconds")
+
+    return classes, aggressive_labels, biased_labels, mean_aggressive_labels, mean_biased_labels, mean_labels, probabilities
 
 
 ################################################################################

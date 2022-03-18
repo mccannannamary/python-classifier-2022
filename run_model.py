@@ -29,7 +29,7 @@ def run_model(model_folder, data_folder, output_folder, allow_failures, verbose)
         raise Exception('No data was provided.')
 
     # Create a folder for the Challenge outputs if it does not already exist.
-    os.makedirs(output_folder, exist_ok=True)
+    #os.makedirs(output_folder, exist_ok=True)
 
     # Run the team's model on the Challenge data.
     if verbose >= 1:
@@ -45,7 +45,8 @@ def run_model(model_folder, data_folder, output_folder, allow_failures, verbose)
 
         # Allow or disallow the model to fail on parts of the data; helpful for debugging.
         try:
-            classes, labels, probabilities = run_challenge_model(model, patient_data, recordings, verbose) ### Teams: Implement this function!!!
+            classes, aggressive_labels, biased_labels, mean_aggressive_labels, mean_biased_labels, mean_labels, probabilities = \
+                run_challenge_model(model, patient_data, recordings, verbose) ### Teams: Implement this function!!!
         except:
             if allow_failures:
                 if verbose >= 2:
@@ -54,12 +55,21 @@ def run_model(model_folder, data_folder, output_folder, allow_failures, verbose)
             else:
                 raise
 
-        # Save Challenge outputs.
-        head, tail = os.path.split(patient_files[i])
-        root, extension = os.path.splitext(tail)
-        output_file = os.path.join(output_folder, root + '.csv')
-        patient_id = get_patient_id(patient_data)
-        save_challenge_outputs(output_file, patient_id, classes, labels, probabilities)
+        output_folders = [output_folder + '_aggressive', output_folder + '_biased',
+                          output_folder + '_mean_aggressive', output_folder + '_mean_biased',
+                          output_folder + '_mean']
+
+        label_list = [aggressive_labels, biased_labels, mean_aggressive_labels, mean_biased_labels, mean_labels]
+
+        for i, folder in enumerate(output_folders):
+            labels = label_list[i]
+            # Save Challenge outputs.
+            os.makedirs(folder, exist_ok=True)
+            head, tail = os.path.split(patient_files[i])
+            root, extension = os.path.splitext(tail)
+            output_file = os.path.join(folder, root + '.csv')
+            patient_id = get_patient_id(patient_data)
+            save_challenge_outputs(output_file, patient_id, classes, labels, probabilities)
 
     if verbose >= 1:
         print('Done.')
