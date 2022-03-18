@@ -256,7 +256,7 @@ def segment_challenge_data(X, y, y_relabel, rec_names):
             tmp = (tmp - np.mean(tmp)) / np.std(tmp)
             N = n_samples - len(tmp)
             X_recording[0, :] = np.concatenate([tmp, np.zeros(N)])
-            names_seg.append(current_name[0] + '_' + str(seg).zfill(3))
+            names_seg.append(current_name[0] + '_' + str(0).zfill(3))
             n_segs += 1
 
         # append segmented recordings and labels

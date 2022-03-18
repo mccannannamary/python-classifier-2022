@@ -98,8 +98,8 @@ def train_challenge_model(data_folder, model_folder, verbose):
         module=ResNet18(n_classes=2),
         criterion=nn.CrossEntropyLoss,
         lr=0.001,
-        batch_size=8,
-        max_epochs=30,
+        batch_size=4,
+        max_epochs=20,
         optimizer=optim.SGD,
         optimizer__momentum=0.9,
         optimizer__weight_decay=0.0005,
@@ -158,9 +158,6 @@ def run_challenge_model(model, data, recordings, verbose):
     classes = model['classes']
     net = model['net']
 
-    if verbose:
-        print('Running neural network...')
-
     tmp_image_folder = '../datasets/circor_img_seg/test/'
     os.makedirs(tmp_image_folder, exist_ok=True)
 
@@ -192,60 +189,30 @@ def run_challenge_model(model, data, recordings, verbose):
 
     # decision rule: first check if any images are classified as unknown, if yes, then classify
     # as unknown. If no, then move on to present. If no, then classify as absent.
-    biased_labels = np.zeros(len(classes), dtype=np.int_)
-    aggressive_labels = np.zeros(len(classes), dtype=np.int_)
     abs_idx = classes.index('absent')
     pres_idx = classes.index('present')
     unknown_idx = classes.index('unknown')
 
-    max_unknown_prob = np.max(img_probabilities[:, unknown_idx])
-    max_pres_prob = np.max(img_probabilities[:, unknown_idx])
-    if max_unknown_prob > 0.2:
-        idx = unknown_idx
-    elif max_pres_prob > 0.2:
-        idx = pres_idx
-    else:
-        idx = abs_idx
-    aggressive_labels[idx] = 1
-
-    if max_unknown_prob > 0.4:
-        idx = unknown_idx
-    elif max_pres_prob > 0.4:
-        idx = pres_idx
-    else:
-        idx = abs_idx
-    biased_labels[idx] = 1
-
-    # Choose label with higher probability
-    mean_aggressive_labels = np.zeros(len(classes), dtype=np.int_)
+    labels = []
     probabilities = np.mean(img_probabilities, axis=0)
-    if probabilities[unknown_idx] > 0.15:
-        idx = unknown_idx
-    elif probabilities[pres_idx] > 0.15:
-        idx = pres_idx
-    else:
-        idx = abs_idx
-    mean_aggressive_labels[idx] = 1
-
-    # Choose label with higher probability, allowing for present class if greater than threshold
-    mean_biased_labels = np.zeros(len(classes), dtype=np.int_)
-    # get "present" index, if mean prob > 0.4 classify as present
-    if probabilities[unknown_idx] > 0.4:
-        idx = unknown_idx
-    elif probabilities[pres_idx] > 0.4:
-        idx = pres_idx
-    else:
-        idx = abs_idx
-    mean_biased_labels[idx] = 1
+    for threshold in [0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35]:
+        tmp = np.zeros(len(classes), dtype=np.int_)
+        if probabilities[unknown_idx] > threshold:
+            idx = unknown_idx
+        elif probabilities[pres_idx] > threshold:
+            idx = pres_idx
+        else:
+            idx = abs_idx
+        tmp[idx] = 1
+        labels.append(tmp)
 
     # Choose label with highest probability
-    mean_labels = np.zeros(len(classes), dtype=np.int_)
+    tmp = np.zeros(len(classes), dtype=np.int_)
     idx = np.argmax(probabilities)
-    mean_labels[idx] = 1
+    tmp[idx] = 1
+    labels.append(tmp)
 
-    print(f"Running using images directly took {time.perf_counter() - beg:.2f} seconds")
-
-    return classes, aggressive_labels, biased_labels, mean_aggressive_labels, mean_biased_labels, mean_labels, probabilities
+    return classes, labels, probabilities
 
 
 ################################################################################

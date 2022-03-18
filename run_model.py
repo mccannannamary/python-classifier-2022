@@ -36,7 +36,7 @@ def run_model(model_folder, data_folder, output_folder, allow_failures, verbose)
         print('Running model on Challenge data...')
 
     # Iterate over the patient files.
-    for i in range(num_patient_files):
+    for i in range(47,num_patient_files):
         if verbose >= 2:
             print('    {}/{}...'.format(i+1, num_patient_files))
 
@@ -45,7 +45,7 @@ def run_model(model_folder, data_folder, output_folder, allow_failures, verbose)
 
         # Allow or disallow the model to fail on parts of the data; helpful for debugging.
         try:
-            classes, aggressive_labels, biased_labels, mean_aggressive_labels, mean_biased_labels, mean_labels, probabilities = \
+            classes, label_list, probabilities = \
                 run_challenge_model(model, patient_data, recordings, verbose) ### Teams: Implement this function!!!
         except:
             if allow_failures:
@@ -55,14 +55,13 @@ def run_model(model_folder, data_folder, output_folder, allow_failures, verbose)
             else:
                 raise
 
-        output_folders = [output_folder + '_aggressive', output_folder + '_biased',
-                          output_folder + '_mean_aggressive', output_folder + '_mean_biased',
-                          output_folder + '_mean']
+        output_folders = [output_folder + '_0.05', output_folder + '_0.1',
+                          output_folder + '_0.15', output_folder + '_0.2',
+                          output_folder + '_0.25', output_folder + '_0.3',
+                          output_folder + '_0.35', output_folder + '_mean']
 
-        label_list = [aggressive_labels, biased_labels, mean_aggressive_labels, mean_biased_labels, mean_labels]
-
-        for i, folder in enumerate(output_folders):
-            labels = label_list[i]
+        for k, folder in enumerate(output_folders):
+            labels = label_list[k]
             # Save Challenge outputs.
             os.makedirs(folder, exist_ok=True)
             head, tail = os.path.split(patient_files[i])
