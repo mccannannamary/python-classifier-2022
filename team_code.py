@@ -188,26 +188,17 @@ def run_challenge_model(model, data, recordings, verbose):
     pres_idx = classes.index('present')
     unknown_idx = classes.index('unknown')
 
-    labels = []
     probabilities = np.mean(img_probabilities, axis=0)
-    thresholds = [0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.1]
-    for th1 in thresholds:
-        for th2 in thresholds:
-            tmp = np.zeros(len(classes), dtype=np.int_)
-            if probabilities[pres_idx] > th1:
-                idx = pres_idx
-            elif probabilities[unknown_idx] > th2:
-                idx = unknown_idx
-            else:
-                idx = abs_idx
-            tmp[idx] = 1
-            labels.append(tmp)
-
-    # Choose label with highest probability
-    tmp = np.zeros(len(classes), dtype=np.int_)
-    idx = np.argmax(probabilities)
-    tmp[idx] = 1
-    labels.append(tmp)
+    labels = np.zeros(len(classes), dtype=np.int_)
+    th1 = 0.07
+    th2 = 0.07
+    if probabilities[pres_idx] > th1:
+        idx = pres_idx
+    elif probabilities[unknown_idx] > th2:
+        idx = unknown_idx
+    else:
+        idx = abs_idx
+    labels[idx] = 1
 
     return classes, labels, probabilities
 
