@@ -34,8 +34,8 @@ from pretrain_model_utils import ResNet18
 # Train your model.
 def train_challenge_model(data_folder, model_folder, verbose):
 
-    split_dataset = False
-    create_dataset = False
+    split_dataset = True
+    create_dataset = True
 
     pretrained_model_folder = './pretrain_resnet_unfreeze/'
 

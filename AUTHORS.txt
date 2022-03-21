@@ -1,0 +1,4 @@
+
+Authors: Anna McCann, Jean-Marc Vesin
+Affiliation: Applied Signal Processing Group, Swiss Federal Institute of Technology, Lausanne, Switzerland
+Contact: anna.mccann@epfl.ch, jean-marc.vesin@epfl.ch
