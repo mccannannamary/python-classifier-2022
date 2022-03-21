@@ -29,7 +29,7 @@ def run_model(model_folder, data_folder, output_folder, allow_failures, verbose)
         raise Exception('No data was provided.')
 
     # Create a folder for the Challenge outputs if it does not already exist.
-    #os.makedirs(output_folder, exist_ok=True)
+    os.makedirs(output_folder, exist_ok=True)
 
     # Run the team's model on the Challenge data.
     if verbose >= 1:
@@ -45,8 +45,7 @@ def run_model(model_folder, data_folder, output_folder, allow_failures, verbose)
 
         # Allow or disallow the model to fail on parts of the data; helpful for debugging.
         try:
-            classes, label_list, probabilities = \
-                run_challenge_model(model, patient_data, recordings, verbose) ### Teams: Implement this function!!!
+            classes, labels, probabilities = run_challenge_model(model, patient_data, recordings, verbose) ### Teams: Implement this function!!!
         except:
             if allow_failures:
                 if verbose >= 2:
@@ -55,21 +54,12 @@ def run_model(model_folder, data_folder, output_folder, allow_failures, verbose)
             else:
                 raise
 
-        output_folders = []
-        thresholds = [0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.1]
-        for th1 in thresholds:
-            for th2 in thresholds:
-                output_folders.append(output_folder + '_' + str(th1) + '_' + str(th2))
-
-        for k, folder in enumerate(output_folders):
-            labels = label_list[k]
-            # Save Challenge outputs.
-            os.makedirs(folder, exist_ok=True)
-            head, tail = os.path.split(patient_files[i])
-            root, extension = os.path.splitext(tail)
-            output_file = os.path.join(folder, root + '.csv')
-            patient_id = get_patient_id(patient_data)
-            save_challenge_outputs(output_file, patient_id, classes, labels, probabilities)
+        # Save Challenge outputs.
+        head, tail = os.path.split(patient_files[i])
+        root, extension = os.path.splitext(tail)
+        output_file = os.path.join(output_folder, root + '.csv')
+        patient_id = get_patient_id(patient_data)
+        save_challenge_outputs(output_file, patient_id, classes, labels, probabilities)
 
     if verbose >= 1:
         print('Done.')
