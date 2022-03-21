@@ -36,7 +36,7 @@ def run_model(model_folder, data_folder, output_folder, allow_failures, verbose)
         print('Running model on Challenge data...')
 
     # Iterate over the patient files.
-    for i in range(47,num_patient_files):
+    for i in range(num_patient_files):
         if verbose >= 2:
             print('    {}/{}...'.format(i+1, num_patient_files))
 
@@ -55,10 +55,11 @@ def run_model(model_folder, data_folder, output_folder, allow_failures, verbose)
             else:
                 raise
 
-        output_folders = [output_folder + '_0.05', output_folder + '_0.1',
-                          output_folder + '_0.15', output_folder + '_0.2',
-                          output_folder + '_0.25', output_folder + '_0.3',
-                          output_folder + '_0.35', output_folder + '_mean']
+        output_folders = []
+        thresholds = [0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.1]
+        for th1 in thresholds:
+            for th2 in thresholds:
+                output_folders.append(output_folder + '_' + str(th1) + '_' + str(th2))
 
         for k, folder in enumerate(output_folders):
             labels = label_list[k]

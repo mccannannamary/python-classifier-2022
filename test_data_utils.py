@@ -128,6 +128,10 @@ def create_cwt_images(X):
     cfs = fb.cwt(data)
     cfs = abs(cfs)
 
+    # enforce preceding dimension if there is only one set of CWT coeffs
+    if cfs.ndim == 2:
+        cfs = cfs[np.newaxis, ...]
+
     for idx, cf in enumerate(cfs):
         # jpg image
         img = get_cfs_as_jpg(cf)

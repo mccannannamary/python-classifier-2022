@@ -158,16 +158,11 @@ def run_challenge_model(model, data, recordings, verbose):
     classes = model['classes']
     net = model['net']
 
-    tmp_image_folder = '../datasets/circor_img_seg/test/'
-    os.makedirs(tmp_image_folder, exist_ok=True)
-
     # preprocess test data
     recordings, labels, rec_names = test_data_utils.get_test_data(data, recordings, verbose, fs_resample=1000, fs=4000)
 
     # segment test data
     X_seg, y_seg, y_seg_relabel, names_seg = preprocess_utils.segment_challenge_data(recordings, labels, labels, rec_names)
-
-    beg = time.perf_counter()
 
     # create CWT image for each PCG segment
     test_imgs = test_data_utils.create_cwt_images(X_seg)
@@ -195,16 +190,18 @@ def run_challenge_model(model, data, recordings, verbose):
 
     labels = []
     probabilities = np.mean(img_probabilities, axis=0)
-    for threshold in [0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35]:
-        tmp = np.zeros(len(classes), dtype=np.int_)
-        if probabilities[unknown_idx] > threshold:
-            idx = unknown_idx
-        elif probabilities[pres_idx] > threshold:
-            idx = pres_idx
-        else:
-            idx = abs_idx
-        tmp[idx] = 1
-        labels.append(tmp)
+    thresholds = [0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.1]
+    for th1 in thresholds:
+        for th2 in thresholds:
+            tmp = np.zeros(len(classes), dtype=np.int_)
+            if probabilities[pres_idx] > th1:
+                idx = pres_idx
+            elif probabilities[unknown_idx] > th2:
+                idx = unknown_idx
+            else:
+                idx = abs_idx
+            tmp[idx] = 1
+            labels.append(tmp)
 
     # Choose label with highest probability
     tmp = np.zeros(len(classes), dtype=np.int_)
