@@ -12,7 +12,6 @@ from skorch import NeuralNetClassifier
 from skorch.helper import predefined_split
 from skorch.callbacks import LRScheduler
 from skorch.callbacks import Checkpoint
-from pretrain_model_utils import AlexNet
 from pretrain_model_utils import ResNet18
 
 
