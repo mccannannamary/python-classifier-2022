@@ -189,8 +189,8 @@ def run_challenge_model(model, data, recordings, verbose):
 
     probabilities = np.mean(img_probabilities, axis=0)
     labels = np.zeros(len(classes), dtype=np.int_)
-    th1 = 0.08
-    th2 = 0.06
+    th1 = 0.06
+    th2 = 0.09
     if probabilities[pres_idx] > th1:
         idx = pres_idx
     elif probabilities[unknown_idx] > th2:
