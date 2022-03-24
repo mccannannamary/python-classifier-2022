@@ -19,10 +19,6 @@ def preprocess(sig, fs_resample, fs):
     # remove spikes from signal
     sig = schmidt_spike_removal(sig, fs_resample)
 
-    # # try wavelet denoising
-    # w = pywt.Wavelet('db14')
-    # maxlev = pywt.dwt_max_level(len(sig), w.dec_len)
-
     return sig
 
 
@@ -408,7 +404,7 @@ def split_data(data_folder, train_folder, val_folder, test_folder):
     for pt_id in ids_test:
         tmp = data_folder + pt_id + '*'
         for file in glob.glob(tmp):
-            shutil.copy(file, test_folder)
+            shutil.copy(file, val_folder)
 
 
 def get_features(data, recordings):

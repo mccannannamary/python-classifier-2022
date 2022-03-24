@@ -36,20 +36,25 @@ def train_challenge_model(data_folder, model_folder, verbose):
     split_dataset = True
     create_dataset = True
 
-    pretrained_model_folder = './pretrain_resnet_unfreeze/'
+    data_folder = './' + data_folder + '/'
+    model_folder = './' + model_folder + '/'
 
-    train_folder = '../datasets/circor/train/'
-    val_folder = '../datasets/circor/val/'
-    test_folder = '../datasets/circor/test/'
+    # do stratified split of all available data into train, validation, and test folders
+    # to prevent overfitting when training model
+    train_folder = './datasets/pt_files/train/'
+    val_folder = './datasets/pt_files/val/'
+    test_folder = './datasets/pt_files/test/'
+
     if split_dataset:
         preprocess_utils.split_data(data_folder, train_folder, val_folder, test_folder)
 
     data_folders = [train_folder, val_folder]
-    image_folders = ['../datasets/circor_img/train/',
-                     '../datasets/circor_img/val/']
-    image_relabel_folders = ['../datasets/circor_img_relabel/train/',
-                             '../datasets/circor_img_relabel/val/']
+    image_folders = ['./datasets/cwt_imgs/train/',
+                     './datasets/cwt_imgs/val/']
+    image_relabel_folders = ['./datasets/relabel_cwt_imgs/train/',
+                             './datasets/relabel_cwt_imgs/val/']
 
+    # using split dataset, create CWT images from segments of PCG data and save in 'image_folders'
     if create_dataset:
         for i, data_folder in enumerate(data_folders):
 
@@ -123,7 +128,9 @@ def train_challenge_model(data_folder, model_folder, verbose):
 
     # initialize neural network
     net.initialize()
+
     # load parameters from pretrained model
+    pretrained_model_folder = './pretrain_resnet_unfreeze/'
     param_fname = os.path.join(pretrained_model_folder, 'model.pkl')
     net.load_params(f_params=param_fname)
 
