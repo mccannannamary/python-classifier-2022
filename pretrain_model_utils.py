@@ -51,11 +51,11 @@ class AlexNet(nn.Module):
 
 
 class ResNet18(nn.Module):
-    def __init__(self, n_classes):
+    def __init__(self, n_classes, pretrained_weights):
         super().__init__()
 
         # load a pre-trained ResNet18
-        model = models.resnet18(pretrained=True)
+        model = models.resnet18(pretrained=pretrained_weights)
 
         # Freeze layers in all but final linear layer
         # for param in model.parameters():
