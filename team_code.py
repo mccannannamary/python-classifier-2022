@@ -14,6 +14,7 @@ import preprocess_utils
 import test_data_utils
 from helper_code import *
 import numpy as np, scipy as sp, scipy.stats, os, joblib
+import glob, shutil
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -24,6 +25,7 @@ from skorch.helper import predefined_split
 from skorch.callbacks import LRScheduler
 from skorch.callbacks import Checkpoint
 from pretrain_model_utils import ResNet18
+from sklearn.model_selection import train_test_split
 
 
 ################################################################################
@@ -38,30 +40,60 @@ def train_challenge_model(data_folder, model_folder, verbose):
     split_dataset = True
     create_dataset = True
 
-    data_folder = './' + data_folder + '/'
-    model_folder = './' + model_folder + '/'
-
     # do stratified split of all available data into train, validation, and test folders
     # to prevent overfitting when training model
     train_folder = './datasets/pt_files/train/'
     val_folder = './datasets/pt_files/val/'
-    test_folder = './datasets/pt_files/test/'
-    # train_folder = '../datasets/circor/train/'
-    # val_folder = '../datasets/circor/val/'
-    # test_folder = '../datasets/circor/test/'
 
     if split_dataset:
-        preprocess_utils.split_data(data_folder, train_folder, val_folder, test_folder)
+        patient_files = find_patient_files(data_folder)
+        n_patient_files = len(patient_files)
+
+        classes = ['Present', 'Unknown', 'Absent']
+        n_classes = len(classes)
+
+        pt_ids = list()
+        labels = list()
+
+        for i in range(n_patient_files):
+            current_patient_data = load_patient_data(patient_files[i])
+            current_patient_id = current_patient_data.split('\n')[0].split(' ')[0]
+            pt_ids.append(current_patient_id)
+
+            current_labels = np.zeros(n_classes, dtype=int)
+            label = get_label(current_patient_data)
+            if label in classes:
+                j = classes.index(label)
+                current_labels[j] = 1
+            labels.append(current_labels)
+
+        # perform stratified random split by labels
+        ids_train, ids_val, labels_train, labels_val = \
+            train_test_split(pt_ids,
+                             labels,
+                             test_size=0.2,
+                             random_state=1,
+                             stratify=labels)
+
+        # get all files matching ids_train and move to train folder (glob and shutils)
+        os.makedirs(train_folder, exist_ok=True)
+        os.makedirs(val_folder, exist_ok=True)
+
+        for pt_id in ids_train:
+            tmp = os.path.join(data_folder, pt_id + '*')
+            for file in glob.glob(tmp):
+                shutil.copy(file, train_folder)
+
+        for pt_id in ids_val:
+            tmp = os.path.join(data_folder, pt_id + '*')
+            for file in glob.glob(tmp):
+                shutil.copy(file, val_folder)
 
     data_folders = [train_folder, val_folder]
     image_folders = ['./datasets/cwt_imgs/train/',
                      './datasets/cwt_imgs/val/']
     image_relabel_folders = ['./datasets/relabel_cwt_imgs/train/',
                              './datasets/relabel_cwt_imgs/val/']
-    # image_folders = ['../datasets/circor_img/train/',
-    #                  '../datasets/circor_img/val/']
-    # image_relabel_folders = ['./datasets/circor_img_relabel/train/',
-    #                          './datasets/circor_img_relabel/val/']
 
     # using split dataset, create CWT images from segments of PCG data and save in 'image_folders'
     if create_dataset:
