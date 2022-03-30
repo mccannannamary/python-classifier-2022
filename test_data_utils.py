@@ -4,7 +4,7 @@ import preprocess_utils
 from preprocess_utils import preprocess
 from matplotlib import cm
 from PIL import Image
-from wavelets_pytorch.transform import WaveletTransformTorch
+from wavelets_pytorch.transform import WaveletTransform
 
 def get_test_data(data, current_recordings, verbose, fs_resample=1000, fs=4000):
 
@@ -100,7 +100,7 @@ def create_cwt_images(X):
 
     dt = 1 / fs
     dj = 1 / 10
-    fb = WaveletTransformTorch(dt, dj, cuda=True)
+    fb = WaveletTransform(dt, dj)
     batch_size = 64
     batch_start = 0
     batch_end = batch_size

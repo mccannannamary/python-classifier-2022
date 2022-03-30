@@ -137,7 +137,8 @@ def train_challenge_model(data_folder, model_folder, verbose):
     valid_set = datasets.ImageFolder(root=image_folders[1], transform=data_transforms['val'])
 
     # Create a torch.device() which should be the GPU if CUDA is available
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = torch.device('cpu')
 
     loaded_resnet18 = ResNet18(n_classes=2, pretrained_weights=False)
     loaded_resnet18.load_state_dict(torch.load('pretrained_resnet18'))
@@ -153,9 +154,9 @@ def train_challenge_model(data_folder, model_folder, verbose):
         optimizer__weight_decay=0.0005,
         train_split=predefined_split(valid_set),
         iterator_train__shuffle=True,
-        iterator_train__num_workers=8,
+        iterator_train__num_workers=4,
         iterator_valid__shuffle=False,
-        iterator_valid__num_workers=8,
+        iterator_valid__num_workers=4,
         callbacks=[
             ('lr_scheduler',
              LRScheduler(policy='ReduceLROnPlateau', patience=3, factor=0.1)),

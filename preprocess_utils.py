@@ -3,7 +3,7 @@ import numpy as np
 from scipy import signal
 from matplotlib import cm
 from PIL import Image
-from wavelets_pytorch.transform import WaveletTransformTorch
+from wavelets_pytorch.transform import WaveletTransform
 from sklearn.model_selection import train_test_split
 import glob, shutil
 
@@ -274,7 +274,7 @@ def create_cwt_images(X, y, y_relabel, name, jpg_dir, jpg_dir_relabel):
 
     dt = 1 / fs
     dj = 1 / 10
-    fb = WaveletTransformTorch(dt, dj, cuda=True)
+    fb = WaveletTransform(dt, dj)
     batch_size = 64
     batch_start = 0
     batch_end = batch_size
