@@ -37,8 +37,8 @@ from sklearn.model_selection import train_test_split
 # Train your model.
 def train_challenge_model(data_folder, model_folder, verbose):
 
-    split_dataset = True
-    create_dataset = True
+    split_dataset = False
+    create_dataset = False
 
     # do stratified split of all available data into train, validation, and test folders
     # to prevent overfitting when training model
@@ -153,9 +153,9 @@ def train_challenge_model(data_folder, model_folder, verbose):
         optimizer__weight_decay=0.0005,
         train_split=predefined_split(valid_set),
         iterator_train__shuffle=True,
-        iterator_train__num_workers=4,
+        iterator_train__num_workers=8,
         iterator_valid__shuffle=False,
-        iterator_valid__num_workers=4,
+        iterator_valid__num_workers=8,
         callbacks=[
             ('lr_scheduler',
              LRScheduler(policy='ReduceLROnPlateau', patience=3, factor=0.1)),
@@ -209,10 +209,10 @@ def run_challenge_model(model, data, recordings, verbose):
     net = model['net']
 
     # preprocess test data
-    recordings, labels, rec_names = test_data_utils.get_test_data(data, recordings, verbose, fs_resample=1000, fs=4000)
+    recordings = test_data_utils.get_test_data(data, recordings, verbose, fs_resample=1000, fs=4000)
 
     # segment test data
-    X_seg, y_seg, y_seg_relabel, names_seg = preprocess_utils.segment_challenge_data(recordings, labels, labels, rec_names)
+    X_seg = test_data_utils.segment_test_data(recordings)
 
     # create CWT image for each PCG segment
     test_imgs = test_data_utils.create_cwt_images(X_seg)
@@ -240,8 +240,8 @@ def run_challenge_model(model, data, recordings, verbose):
 
     probabilities = np.mean(img_probabilities, axis=0)
     labels = np.zeros(len(classes), dtype=np.int_)
-    th1 = 0.06
-    th2 = 0.09
+    th1 = 0.05
+    th2 = 0.05
     if probabilities[pres_idx] > th1:
         idx = pres_idx
     elif probabilities[unknown_idx] > th2:
