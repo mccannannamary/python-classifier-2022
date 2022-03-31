@@ -37,8 +37,8 @@ from sklearn.model_selection import train_test_split
 # Train your model.
 def train_challenge_model(data_folder, model_folder, verbose):
 
-    split_dataset = False
-    create_dataset = False
+    split_dataset = True
+    create_dataset = True
 
     # do stratified split of all available data into train, validation, and test folders
     # to prevent overfitting when training model
@@ -240,8 +240,8 @@ def run_challenge_model(model, data, recordings, verbose):
 
     probabilities = np.mean(img_probabilities, axis=0)
     labels = np.zeros(len(classes), dtype=np.int_)
-    th1 = 0.05
-    th2 = 0.05
+    th1 = 0.06
+    th2 = 0.07
     if probabilities[pres_idx] > th1:
         idx = pres_idx
     elif probabilities[unknown_idx] > th2:
