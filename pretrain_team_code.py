@@ -43,7 +43,7 @@ def pretrain_challenge_model(data_folder, model_folder):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     classifier = NeuralNetClassifier(
-        module=ResNet18(n_classes=2, pretrained_weights=True),
+        module=ResNet18(n_classes=2),
         criterion=nn.CrossEntropyLoss,
         lr=0.001,
         batch_size=4,
