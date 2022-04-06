@@ -12,6 +12,7 @@ import preprocess_utils
 import test_data_utils
 from helper_code import *
 import numpy as np, scipy as sp, scipy.stats, os, shutil, joblib
+import glob
 import time
 import torch
 import torch.nn as nn
@@ -22,6 +23,7 @@ from skorch import NeuralNetClassifier
 from skorch.helper import predefined_split
 from skorch.callbacks import LRScheduler
 from skorch.callbacks import Checkpoint
+from sklearn.model_selection import train_test_split
 from pretrain_model_utils import ResNet18
 
 
@@ -37,23 +39,78 @@ def train_challenge_model(data_folder, model_folder, verbose):
     split_dataset = False
     create_dataset = False
 
-    pretrained_model_folder = './pretrain_resnet_unfreeze/'
+    # do stratified split of all available data into train, validation, and test folders
+    # to prevent overfitting when training model
+    train_folder = './datasets/pt_files_18_03/train/'
+    val_folder = './datasets/pt_files_18_03/val/'
+    test_folder = './datasets/pt_files_18_03/test'
 
-    train_folder = '../datasets/circor/train/'
-    val_folder = '../datasets/circor/val/'
-    test_folder = '../datasets/circor/test/'
     if split_dataset:
-        preprocess_utils.split_data(data_folder, train_folder, val_folder, test_folder)
+        patient_files = find_patient_files(data_folder)
+        n_patient_files = len(patient_files)
+
+        classes = ['Present', 'Unknown', 'Absent']
+        n_classes = len(classes)
+
+        pt_ids = list()
+        labels = list()
+
+        for i in range(n_patient_files):
+            current_patient_data = load_patient_data(patient_files[i])
+            current_patient_id = current_patient_data.split('\n')[0].split(' ')[0]
+            pt_ids.append(current_patient_id)
+
+            current_labels = np.zeros(n_classes, dtype=int)
+            label = get_label(current_patient_data)
+            if label in classes:
+                j = classes.index(label)
+                current_labels[j] = 1
+            labels.append(current_labels)
+
+        # perform stratified random split by labels
+        ids_train, ids_val, labels_train, labels_val = \
+            train_test_split(pt_ids,
+                             labels,
+                             test_size=0.2,
+                             random_state=1,
+                             stratify=labels)
+
+        ids_val, ids_test, labels_val, labels_test = \
+            train_test_split(ids_val,
+                             labels_val,
+                             test_size=0.5,
+                             random_state=1,
+                             stratify=labels_val)
+
+        # get all files matching ids_train and move to train folder (glob and shutils)
+        os.makedirs(train_folder, exist_ok=True)
+        os.makedirs(val_folder, exist_ok=True)
+        os.makedirs(test_folder, exist_ok=True)
+
+        for pt_id in ids_train:
+            tmp = os.path.join(data_folder, pt_id + '*')
+            for file in glob.glob(tmp):
+                shutil.copy(file, train_folder)
+
+        for pt_id in ids_val:
+            tmp = os.path.join(data_folder, pt_id + '*')
+            for file in glob.glob(tmp):
+                shutil.copy(file, val_folder)
+
+        for pt_id in ids_test:
+            tmp = os.path.join(data_folder, pt_id + '*')
+            for file in glob.glob(tmp):
+                shutil.copy(file, test_folder)
 
     data_folders = [train_folder, val_folder]
-    image_folders = ['../datasets/circor_img/train/',
-                     '../datasets/circor_img/val/']
-    image_relabel_folders = ['../datasets/circor_img_relabel/train/',
-                             '../datasets/circor_img_relabel/val/']
+    image_folders = ['./datasets/cwt_imgs_18_03/train/',
+                     './datasets/cwt_imgs_18_03/val/']
+    image_relabel_folders = ['./datasets/relabel_cwt_imgs_18_03/train/',
+                             './datasets/relabel_cwt_imgs_18_03/val/']
 
+    # using split dataset, create CWT images from segments of PCG data and save in 'image_folders'
     if create_dataset:
         for i, data_folder in enumerate(data_folders):
-
             # Find data files.
             if verbose >= 1:
                 print('Finding data files...')
@@ -98,8 +155,8 @@ def train_challenge_model(data_folder, model_folder, verbose):
         module=ResNet18(n_classes=2),
         criterion=nn.CrossEntropyLoss,
         lr=0.001,
-        batch_size=8,
-        max_epochs=30,
+        batch_size=4,
+        max_epochs=20,
         optimizer=optim.SGD,
         optimizer__momentum=0.9,
         optimizer__weight_decay=0.0005,
@@ -125,6 +182,7 @@ def train_challenge_model(data_folder, model_folder, verbose):
     # initialize neural network
     net.initialize()
     # load parameters from pretrained model
+    pretrained_model_folder = './pretrain_18_03_0/'
     param_fname = os.path.join(pretrained_model_folder, 'model.pkl')
     net.load_params(f_params=param_fname)
 
@@ -158,19 +216,11 @@ def run_challenge_model(model, data, recordings, verbose):
     classes = model['classes']
     net = model['net']
 
-    if verbose:
-        print('Running neural network...')
-
-    tmp_image_folder = '../datasets/circor_img_seg/test/'
-    os.makedirs(tmp_image_folder, exist_ok=True)
-
     # preprocess test data
-    recordings, labels, rec_names = test_data_utils.get_test_data(data, recordings, verbose, fs_resample=1000, fs=4000)
+    recordings = test_data_utils.get_test_data(data, recordings, verbose, fs_resample=1000, fs=4000)
 
     # segment test data
-    X_seg, y_seg, y_seg_relabel, names_seg = preprocess_utils.segment_challenge_data(recordings, labels, labels, rec_names)
-
-    beg = time.perf_counter()
+    X_seg = test_data_utils.segment_test_data(recordings)
 
     # create CWT image for each PCG segment
     test_imgs = test_data_utils.create_cwt_images(X_seg)
@@ -192,61 +242,23 @@ def run_challenge_model(model, data, recordings, verbose):
 
     # decision rule: first check if any images are classified as unknown, if yes, then classify
     # as unknown. If no, then move on to present. If no, then classify as absent.
-    biased_labels = np.zeros(len(classes), dtype=np.int_)
-    aggressive_labels = np.zeros(len(classes), dtype=np.int_)
     abs_idx = classes.index('absent')
     pres_idx = classes.index('present')
     unknown_idx = classes.index('unknown')
 
-    max_unknown_prob = np.max(img_probabilities[:, unknown_idx])
-    max_pres_prob = np.max(img_probabilities[:, unknown_idx])
-    if max_unknown_prob > 0.2:
-        idx = unknown_idx
-    elif max_pres_prob > 0.2:
-        idx = pres_idx
-    else:
-        idx = abs_idx
-    aggressive_labels[idx] = 1
-
-    if max_unknown_prob > 0.4:
-        idx = unknown_idx
-    elif max_pres_prob > 0.4:
-        idx = pres_idx
-    else:
-        idx = abs_idx
-    biased_labels[idx] = 1
-
-    # Choose label with higher probability
-    mean_aggressive_labels = np.zeros(len(classes), dtype=np.int_)
     probabilities = np.mean(img_probabilities, axis=0)
-    if probabilities[unknown_idx] > 0.15:
-        idx = unknown_idx
-    elif probabilities[pres_idx] > 0.15:
+    labels = np.zeros(len(classes), dtype=np.int_)
+    th1 = 0.06
+    th2 = 0.07
+    if probabilities[pres_idx] > th1:
         idx = pres_idx
+    elif probabilities[unknown_idx] > th2:
+        idx = unknown_idx
     else:
         idx = abs_idx
-    mean_aggressive_labels[idx] = 1
+    labels[idx] = 1
 
-    # Choose label with higher probability, allowing for present class if greater than threshold
-    mean_biased_labels = np.zeros(len(classes), dtype=np.int_)
-    # get "present" index, if mean prob > 0.4 classify as present
-    if probabilities[unknown_idx] > 0.4:
-        idx = unknown_idx
-    elif probabilities[pres_idx] > 0.4:
-        idx = pres_idx
-    else:
-        idx = abs_idx
-    mean_biased_labels[idx] = 1
-
-    # Choose label with highest probability
-    mean_labels = np.zeros(len(classes), dtype=np.int_)
-    idx = np.argmax(probabilities)
-    mean_labels[idx] = 1
-
-    print(f"Running using images directly took {time.perf_counter() - beg:.2f} seconds")
-
-    return classes, aggressive_labels, biased_labels, mean_aggressive_labels, mean_biased_labels, mean_labels, probabilities
-
+    return classes, labels, probabilities
 
 ################################################################################
 #

@@ -1,6 +1,4 @@
-from helper_code import *
 import numpy as np
-import preprocess_utils
 from preprocess_utils import preprocess
 from matplotlib import cm
 from PIL import Image
@@ -8,45 +6,20 @@ from wavelets_pytorch.transform import WaveletTransformTorch
 
 def get_test_data(data, current_recordings, verbose, fs_resample=1000, fs=4000):
 
-    classes = ['Present', 'Unknown', 'Absent']
-    n_classes = len(classes)
-
-    # Extract the features and labels.
+    # Extract the features.
     if verbose >= 1:
-        print('Extracting features and labels from the test data...')
+        print('Extracting features from the test data...')
 
     processed_recordings = list()
-    labels = list()
-    rec_names = list()
 
     # Load the current patient data and recordings.
-    current_patient_data = data
-
-    # get current recording names
-    current_recording_names = preprocess_utils.load_recording_names(current_patient_data)
-    rec_names.append(np.vstack(current_recording_names))
-
     # append processed recording from each location for this patient
     n_recordings = len(current_recordings)
     for r in range(n_recordings):
         recording = preprocess(current_recordings[r], fs_resample=fs_resample, fs=fs)
         processed_recordings.append(recording)
 
-    # Get label for each recording - this is where should differ if I want to relabel
-    # for the different types of murmurs, or for depending on whether murmur heard at this
-    # location or not
-    # Extract labels and use one-hot encoding.
-    current_labels = np.zeros(n_classes, dtype=int)
-    label = get_label(current_patient_data)
-    if label in classes:
-        j = classes.index(label)
-        current_labels[j] = 1
-    labels.append(np.tile(current_labels, (n_recordings, 1)))
-
-    rec_names = np.vstack(rec_names)
-    labels = np.vstack(labels)
-
-    return processed_recordings, labels, rec_names
+    return processed_recordings
 
 
 def segment_test_data(X):
@@ -69,9 +42,9 @@ def segment_test_data(X):
         X_recording = np.ndarray((n_segs, n_samples))
 
         for seg in range(n_segs):
+            # get entire cardiac cycle
             tmp = X[i][start_idx:end_idx]
             tmp = (tmp - np.mean(tmp)) / np.std(tmp)
-            # check concatenation
             X_recording[seg, :] = tmp
 
             start_idx += n_samples
@@ -84,6 +57,7 @@ def segment_test_data(X):
             tmp = (tmp - np.mean(tmp)) / np.std(tmp)
             N = n_samples - len(tmp)
             X_recording[0, :] = np.concatenate([tmp, np.zeros(N)])
+            n_segs += 1
 
         # append segmented recordings
         X_seg.append(X_recording)
@@ -127,6 +101,10 @@ def create_cwt_images(X):
     data = X[batch_start:n_samples, :]
     cfs = fb.cwt(data)
     cfs = abs(cfs)
+
+    # enforce preceding dimension if there is only one set of CWT coeffs
+    if cfs.ndim == 2:
+        cfs = cfs[np.newaxis, ...]
 
     for idx, cf in enumerate(cfs):
         # jpg image
