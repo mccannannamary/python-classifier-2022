@@ -37,8 +37,8 @@ from sklearn.model_selection import train_test_split
 # Train your model.
 def train_challenge_model(data_folder, model_folder, verbose):
 
-    split_dataset = False
-    create_dataset = False
+    split_dataset = True
+    create_dataset = True
 
     # do stratified split of all available data into train, validation, and test folders
     # to prevent overfitting when training model
