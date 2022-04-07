@@ -13,7 +13,6 @@ import test_data_utils
 from helper_code import *
 import numpy as np, scipy as sp, scipy.stats, os, shutil, joblib
 import glob
-import time
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -41,9 +40,9 @@ def train_challenge_model(data_folder, model_folder, verbose):
 
     # do stratified split of all available data into train, validation, and test folders
     # to prevent overfitting when training model
-    train_folder = './datasets/pt_files_18_03/train/'
-    val_folder = './datasets/pt_files_18_03/val/'
-    test_folder = './datasets/pt_files_18_03/test'
+    train_folder = './datasets/pt_files/train/'
+    val_folder = './datasets/pt_files/val/'
+    test_folder = './datasets/pt_files/test'
 
     if split_dataset:
         patient_files = find_patient_files(data_folder)
@@ -103,10 +102,10 @@ def train_challenge_model(data_folder, model_folder, verbose):
                 shutil.copy(file, test_folder)
 
     data_folders = [train_folder, val_folder]
-    image_folders = ['./datasets/cwt_imgs_18_03/train/',
-                     './datasets/cwt_imgs_18_03/val/']
-    image_relabel_folders = ['./datasets/relabel_cwt_imgs_18_03/train/',
-                             './datasets/relabel_cwt_imgs_18_03/val/']
+    image_folders = ['./datasets/cwt_imgs/train/',
+                     './datasets/cwt_imgs/val/']
+    image_relabel_folders = ['./datasets/relabel_cwt_imgs/train/',
+                             './datasets/relabel_cwt_imgs/val/']
 
     # using split dataset, create CWT images from segments of PCG data and save in 'image_folders'
     if create_dataset:
@@ -156,7 +155,7 @@ def train_challenge_model(data_folder, model_folder, verbose):
         criterion=nn.CrossEntropyLoss,
         lr=0.001,
         batch_size=4,
-        max_epochs=20,
+        max_epochs=30,
         optimizer=optim.SGD,
         optimizer__momentum=0.9,
         optimizer__weight_decay=0.0005,
@@ -167,7 +166,7 @@ def train_challenge_model(data_folder, model_folder, verbose):
         iterator_valid__num_workers=8,
         callbacks=[
             ('lr_scheduler',
-             LRScheduler(policy='ReduceLROnPlateau', patience=3, factor=0.1)),
+             LRScheduler(policy='StepLR', step_size=7, gamma=0.1)),
             ('checkpoint',
              Checkpoint(dirname=model_folder,
                         monitor='valid_acc_best',
@@ -182,7 +181,7 @@ def train_challenge_model(data_folder, model_folder, verbose):
     # initialize neural network
     net.initialize()
     # load parameters from pretrained model
-    pretrained_model_folder = './pretrain_18_03_0/'
+    pretrained_model_folder = './pretrain_resnet_unfreeze/'
     param_fname = os.path.join(pretrained_model_folder, 'model.pkl')
     net.load_params(f_params=param_fname)
 
@@ -248,7 +247,7 @@ def run_challenge_model(model, data, recordings, verbose):
 
     probabilities = np.mean(img_probabilities, axis=0)
     labels = np.zeros(len(classes), dtype=np.int_)
-    th1 = 0.06
+    th1 = 0.05
     th2 = 0.07
     if probabilities[pres_idx] > th1:
         idx = pres_idx
