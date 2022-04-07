@@ -37,8 +37,8 @@ from sklearn.model_selection import train_test_split
 # Train your model.
 def train_challenge_model(data_folder, model_folder, verbose):
 
-    split_dataset = True
-    create_dataset = True
+    split_dataset = False
+    create_dataset = False
 
     # do stratified split of all available data into train, validation, and test folders
     # to prevent overfitting when training model
@@ -133,8 +133,8 @@ def train_challenge_model(data_folder, model_folder, verbose):
     }
 
     # create pytorch datasets from folders where we saved images
-    train_set = datasets.ImageFolder(root=image_folders[0], transform=data_transforms['train'])
-    valid_set = datasets.ImageFolder(root=image_folders[1], transform=data_transforms['val'])
+    train_set = datasets.ImageFolder(root=image_relabel_folders[0], transform=data_transforms['train'])
+    valid_set = datasets.ImageFolder(root=image_relabel_folders[1], transform=data_transforms['val'])
 
     # Create a torch.device() which should be the GPU if CUDA is available
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -147,7 +147,7 @@ def train_challenge_model(data_folder, model_folder, verbose):
         criterion=nn.CrossEntropyLoss,
         lr=0.001,
         batch_size=4,
-        max_epochs=20,
+        max_epochs=30,
         optimizer=optim.SGD,
         optimizer__momentum=0.9,
         optimizer__weight_decay=0.0005,
@@ -240,8 +240,8 @@ def run_challenge_model(model, data, recordings, verbose):
 
     probabilities = np.mean(img_probabilities, axis=0)
     labels = np.zeros(len(classes), dtype=np.int_)
-    th1 = 0.06
-    th2 = 0.07
+    th1 = 0.05
+    th2 = 0.05
     if probabilities[pres_idx] > th1:
         idx = pres_idx
     elif probabilities[unknown_idx] > th2:
