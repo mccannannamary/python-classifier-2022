@@ -137,15 +137,17 @@ def train_challenge_model(data_folder, model_folder, verbose):
     valid_set = datasets.ImageFolder(root=image_folders[1], transform=data_transforms['val'])
 
     # Create a torch.device() which should be the GPU if CUDA is available
-    # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    device = torch.device('cpu')
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    loaded_resnet18 = ResNet18(n_classes=2, pretrained_weights=False)
+    loaded_resnet18.load_state_dict(torch.load('pretrained_resnet18'))
 
     net = NeuralNetClassifier(
-        module=ResNet18(n_classes=2),
+        module=loaded_resnet18,
         criterion=nn.CrossEntropyLoss,
         lr=0.001,
         batch_size=4,
-        max_epochs=30,
+        max_epochs=20,
         optimizer=optim.SGD,
         optimizer__momentum=0.9,
         optimizer__weight_decay=0.0005,
@@ -156,7 +158,7 @@ def train_challenge_model(data_folder, model_folder, verbose):
         iterator_valid__num_workers=8,
         callbacks=[
             ('lr_scheduler',
-             LRScheduler(policy='StepLR', step_size=7, gamma=0.1)),
+             LRScheduler(policy='ReduceLROnPlateau', patience=3, factor=0.1)),
             ('checkpoint',
              Checkpoint(dirname=model_folder,
                         monitor='valid_acc_best',
@@ -182,13 +184,12 @@ def train_challenge_model(data_folder, model_folder, verbose):
 
     net.fit(train_set, y=None)
 
-    # Choose best decision rule
-    classes = ['absent', 'present', 'unknown']
-
     # Create a folder for the model if it does not already exist.
     os.makedirs(model_folder, exist_ok=True)
 
     # Save the model.
+    classes = ['absent', 'present', 'unknown']
+    # save_challenge_model(model_folder, classes, net, ensemble_classifier, imputer)
     save_challenge_model(model_folder, classes, net)
 
     if verbose >= 1:
