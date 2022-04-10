@@ -13,6 +13,7 @@ from skorch.helper import predefined_split
 from skorch.callbacks import LRScheduler
 from skorch.callbacks import Checkpoint
 from pretrain_model_utils import ResNet18
+from pretrain_model_utils import ResNet50
 
 
 def pretrain_challenge_model(data_folder, model_folder):
@@ -43,11 +44,11 @@ def pretrain_challenge_model(data_folder, model_folder):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     classifier = NeuralNetClassifier(
-        module=ResNet18(n_classes=2, pretrained_weights=True),
+        module=ResNet50(n_classes=2, pretrained_weights=True),
         criterion=nn.CrossEntropyLoss,
         lr=0.001,
         batch_size=4,
-        max_epochs=15,
+        max_epochs=30,
         optimizer=optim.SGD,
         optimizer__momentum=0.9,
         optimizer__weight_decay=0.0005,
@@ -58,7 +59,7 @@ def pretrain_challenge_model(data_folder, model_folder):
         iterator_valid__num_workers=8,
         callbacks=[
             ('lr_scheduler',
-             LRScheduler(policy='StepLR', step_size=7, gamma=0.1)),
+             LRScheduler(policy='ReduceLROnPlateau', patience=5, factor=0.1)),
             ('checkpoint',
              Checkpoint(dirname=model_folder,
                         monitor='valid_acc_best',
