@@ -132,17 +132,20 @@ def get_challenge_data(data_folder, verbose, fs_resample=1000, fs=4000):
     if n_patient_files == 0:
         raise Exception('No data was provided.')
 
-    classes = ['Present', 'Unknown', 'Absent']
-    n_classes = len(classes)
+    murmur_classes = ['Present', 'Unknown', 'Absent']
+    n_murmur_classes = len(murmur_classes)
+    outcome_classes = ['Abnormal', 'Normal']
+    n_outcome_classes = len(outcome_classes)
 
-    # Extract the features and labels.
+    # Extract the features and murmurs.
     if verbose >= 1:
-        print('Extracting features and labels from the Challenge data...')
+        print('Extracting features and murmurs from the Challenge data...')
 
     recordings = list()
     features = list()
-    labels = list()
-    relabels = list()
+    murmurs = list()
+    relabeled_murmurs = list()
+    outcomes = list()
     rec_names = list()
     rec_names_list = list()
 
@@ -166,52 +169,61 @@ def get_challenge_data(data_folder, verbose, fs_resample=1000, fs=4000):
             recording = preprocess(current_recordings[r], fs_resample=fs_resample, fs=fs)
             recordings.append(recording)
 
-        # Extract label for each recording using one-hot encoding
-        current_labels = np.zeros(n_classes, dtype=int)
-        label = get_label(current_patient_data)
-        if label in classes:
-            j = classes.index(label)
-            current_labels[j] = 1
-        labels.append(np.tile(current_labels, (n_recordings, 1)))
+        # Extract murmur for each recording using one-hot encoding
+        current_murmurs = np.zeros(n_murmur_classes, dtype=int)
+        murmur = get_murmur(current_patient_data)
+        if murmur in murmur_classes:
+            j = murmur_classes.index(murmur)
+            current_murmurs[j] = 1
+        murmurs.append(np.tile(current_murmurs, (n_recordings, 1)))
 
-        if compare_strings(label, 'Present'):
+        # Extract outcome for each recording using one-hot encoding
+        current_outcome = np.zeros(n_outcome_classes, dtype=int)
+        outcome = get_outcome(current_patient_data)
+        if outcome in outcome_classes:
+            j = outcome_classes.index(outcome)
+            current_outcome[j] = 1
+        outcomes.append(np.tile(current_outcome, (n_recordings, 1)))
+
+        if compare_strings(murmur, 'Present'):
             murmur_locations = get_murmur_locations(current_patient_data)
             if len(murmur_locations) != len(current_recordings):
-                # default 'Absent' label
-                current_labels = np.tile(np.array([0, 0, 1]), (n_recordings, 1))
-                # correct labels so that only those where murmur was heard are actually labeled as positive
+                # default 'Absent' murmur
+                current_murmurs = np.tile(np.array([0, 0, 1]), (n_recordings, 1))
+                # correct murmurs so that only those where murmur was heard are actually labeled as positive
                 for location in murmur_locations:
                     idx = [k for k, s in enumerate(rec_names_list[i]) if location in s]
-                    current_labels[idx, :] = np.array([1, 0, 0])
-                relabels.append(current_labels)
+                    current_murmurs[idx, :] = np.array([1, 0, 0])
+                relabeled_murmurs.append(current_murmurs)
 
             else:
-                # Extract label for each recording using one-hot encoding
-                current_labels = np.zeros(n_classes, dtype=int)
-                label = get_label(current_patient_data)
-                if label in classes:
-                    j = classes.index(label)
-                    current_labels[j] = 1
-                relabels.append(np.tile(current_labels, (n_recordings, 1)))
+                # Extract murmur for each recording using one-hot encoding
+                current_murmurs = np.zeros(n_murmur_classes, dtype=int)
+                murmur = get_murmur(current_patient_data)
+                if murmur in murmur_classes:
+                    j = murmur_classes.index(murmur)
+                    current_murmurs[j] = 1
+                relabeled_murmurs.append(np.tile(current_murmurs, (n_recordings, 1)))
 
         else:
-            # Extract label for each recording using one-hot encoding
-            current_labels = np.zeros(n_classes, dtype=int)
-            label = get_label(current_patient_data)
-            if label in classes:
-                j = classes.index(label)
-                current_labels[j] = 1
-            relabels.append(np.tile(current_labels, (n_recordings, 1)))
+            # Extract murmur for each recording using one-hot encoding
+            current_murmurs = np.zeros(n_murmur_classes, dtype=int)
+            murmur = get_murmur(current_patient_data)
+            if murmur in murmur_classes:
+                j = murmur_classes.index(murmur)
+                current_murmurs[j] = 1
+            relabeled_murmurs.append(np.tile(current_murmurs, (n_recordings, 1)))
 
     features = np.vstack(features)
-    labels = np.vstack(labels)
-    relabels = np.vstack(relabels)
+    murmurs = np.vstack(murmurs)
+    relabeled_murmurs = np.vstack(relabeled_murmurs)
+    outcomes = np.vstack(outcomes)
     rec_names = np.vstack(rec_names)
 
-    return recordings, features, labels, relabels, rec_names
+    return recordings, features, murmurs, relabeled_murmurs, outcomes, rec_names
 
 
-def segment_challenge_data(X, y, y_relabel, rec_names):
+def segment_challenge_data(X, y_murmurs, y_relabeled_murmurs, y_outcomes, rec_names):
     fs = 1000
     seg_len = 7.5
 
@@ -219,8 +231,9 @@ def segment_challenge_data(X, y, y_relabel, rec_names):
     n_samples = int(fs*seg_len)
 
     X_seg = list()
-    y_seg = list()
-    y_seg_relabel = list()
+    y_murmurs_seg = list()
+    y_murmurs_seg_relabel = list()
+    y_outcomes_seg = list()
     names_seg = list()
 
     for i in range(n_recordings):
@@ -257,14 +270,16 @@ def segment_challenge_data(X, y, y_relabel, rec_names):
 
         # append segmented recordings and labels
         X_seg.append(X_recording)
-        y_seg.append(np.tile(y[i], (n_segs, 1)))
-        y_seg_relabel.append(np.tile(y_relabel[i], (n_segs, 1)))
+        y_murmurs_seg.append(np.tile(y_murmurs[i], (n_segs, 1)))
+        y_murmurs_seg_relabel.append(np.tile(y_relabeled_murmurs[i], (n_segs, 1)))
+        y_outcomes_seg.append(np.tile(y_outcomes[i], (n_segs, 1)))
 
     X_seg = np.vstack(X_seg)
-    y_seg = np.vstack(y_seg)
-    y_seg_relabel = np.vstack(y_seg_relabel)
+    y_murmurs_seg = np.vstack(y_murmurs_seg)
+    y_murmurs_seg_relabel = np.vstack(y_murmurs_seg_relabel)
+    y_outcomes_seg = np.vstack(y_outcomes_seg)
 
-    return X_seg, y_seg, y_seg_relabel, names_seg
+    return X_seg, y_murmurs_seg, y_murmurs_seg_relabel, y_outcomes_seg, names_seg
 
 
 def create_cwt_images(X, y, y_relabel, name, jpg_dir, jpg_dir_relabel):

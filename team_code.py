@@ -53,7 +53,7 @@ def train_challenge_model(data_folder, model_folder, verbose):
         n_classes = len(classes)
 
         pt_ids = list()
-        labels = list()
+        murmurs = list()
 
         for i in range(n_patient_files):
             current_patient_data = load_patient_data(patient_files[i])
@@ -61,19 +61,19 @@ def train_challenge_model(data_folder, model_folder, verbose):
             pt_ids.append(current_patient_id)
 
             current_labels = np.zeros(n_classes, dtype=int)
-            label = get_label(current_patient_data)
+            label = get_murmur(current_patient_data)
             if label in classes:
                 j = classes.index(label)
                 current_labels[j] = 1
-            labels.append(current_labels)
+            murmurs.append(current_labels)
 
-        # perform stratified random split by labels
+        # perform stratified random split by murmurs
         ids_train, ids_val, labels_train, labels_val = \
             train_test_split(pt_ids,
-                             labels,
+                             murmurs,
                              test_size=0.2,
                              random_state=1,
-                             stratify=labels)
+                             stratify=murmurs)
 
         # get all files matching ids_train and move to train folder (glob and shutils)
         os.makedirs(train_folder, exist_ok=True)
@@ -103,15 +103,15 @@ def train_challenge_model(data_folder, model_folder, verbose):
             if verbose >= 1:
                 print('Finding data files...')
 
-            recordings, features, labels, relabels, rec_names = \
+            recordings, features, murmurs, relabeled_murmurs, outcomes, rec_names = \
                 preprocess_utils.get_challenge_data(data_folder, verbose, fs_resample=1000, fs=4000)
 
             # now perform segmentation
-            X, y, y_relabel, names_seg = \
-                preprocess_utils.segment_challenge_data(recordings, labels, relabels, rec_names)
+            X, y_murmurs, y_relabeled_murmurs, y_outcomes_seg, names_seg = \
+                preprocess_utils.segment_challenge_data(recordings, murmurs, relabeled_murmurs, outcomes, rec_names)
 
             # now create and save a CWT image for each PCG segment
-            preprocess_utils.create_cwt_images(X, y, y_relabel, names_seg, image_folders[i], image_relabel_folders[i])
+            preprocess_utils.create_cwt_images(X, y_murmurs, y_relabeled_murmurs, names_seg, image_folders[i], image_relabel_folders[i])
 
     # Train neural net.
     if verbose >= 1:
