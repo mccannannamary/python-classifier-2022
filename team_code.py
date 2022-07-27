@@ -8,6 +8,7 @@
 # Import libraries and functions. You can change or remove them.
 #
 ################################################################################
+import sklearn.utils.class_weight
 import torchvision.models
 
 import preprocess_utils
@@ -26,6 +27,7 @@ from skorch.callbacks import LRScheduler
 from skorch.callbacks import Checkpoint
 from pretrain_model_utils import ResNet18
 from sklearn.model_selection import train_test_split
+from sklearn.utils.class_weight import compute_class_weight
 
 
 ################################################################################
@@ -37,7 +39,7 @@ from sklearn.model_selection import train_test_split
 # Train your model.
 def train_challenge_model(data_folder, model_folder, verbose):
 
-    split_dataset = True
+    split_dataset = False
     create_dataset = True
 
     # do stratified split of all available data into train, validation, and test folders
@@ -90,12 +92,12 @@ def train_challenge_model(data_folder, model_folder, verbose):
                 shutil.copy(file, val_folder)
 
     data_folders = [train_folder, val_folder]
-    image_folders = ['./datasets/cwt_imgs/train/',
+    murmur_image_folders = ['./datasets/cwt_imgs/train/',
                      './datasets/cwt_imgs/val/']
-    image_relabel_folders = ['./datasets/relabel_cwt_imgs/train/',
+    murmur_image_relabel_folders = ['./datasets/relabel_cwt_imgs/train/',
                              './datasets/relabel_cwt_imgs/val/']
 
-    # using split dataset, create CWT images from segments of PCG data and save in 'image_folders'
+    # using split dataset, create CWT images from segments of PCG data and save in 'murmur_image_folders'
     if create_dataset:
         for i, data_folder in enumerate(data_folders):
 
@@ -110,9 +112,20 @@ def train_challenge_model(data_folder, model_folder, verbose):
             X, y_murmurs, y_relabeled_murmurs, y_outcomes_seg, names_seg = \
                 preprocess_utils.segment_challenge_data(recordings, murmurs, relabeled_murmurs, outcomes, rec_names)
 
-            # now create and save a CWT image for each PCG segment
-            preprocess_utils.create_cwt_images(X, y_murmurs, y_relabeled_murmurs, names_seg, image_folders[i], image_relabel_folders[i])
+            # using train set, calculate class weights to be given to CrossEntropyLoss
+            if i == 0:
+                murmur_class_weights = compute_class_weight(
+                    class_weight='balanced',
+                    classes=np.unique(np.argmax(y_murmurs, axis=1)),
+                    y=np.argmax(y_murmurs, axis=1))
+                output_class_weights = compute_class_weight(
+                    class_weight='balanced',
+                    classes=np.unique(np.argmax(y_outcomes_seg, axis=1)),
+                    y=np.argmax(y_outcomes_seg, axis=1))
 
+            # now create and save a CWT image for each PCG segment
+            preprocess_utils.create_cwt_images(X, y_murmurs, y_relabeled_murmurs, names_seg, murmur_image_folders[i], murmur_image_relabel_folders[i])
+            #preprocess_utils.create_cwt_images(X, y_outcomes_seg, names_seg)
     # Train neural net.
     if verbose >= 1:
         print('Training neural network...')
@@ -133,8 +146,8 @@ def train_challenge_model(data_folder, model_folder, verbose):
     }
 
     # create pytorch datasets from folders where we saved images
-    train_set = datasets.ImageFolder(root=image_folders[0], transform=data_transforms['train'])
-    valid_set = datasets.ImageFolder(root=image_folders[1], transform=data_transforms['val'])
+    train_set = datasets.ImageFolder(root=murmur_image_folders[0], transform=data_transforms['train'])
+    valid_set = datasets.ImageFolder(root=murmur_image_folders[1], transform=data_transforms['val'])
 
     # Create a torch.device() which should be the GPU if CUDA is available
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
