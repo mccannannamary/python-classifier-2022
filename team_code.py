@@ -28,6 +28,7 @@ from skorch.callbacks import Checkpoint
 from pretrain_model_utils import ResNet18
 from sklearn.model_selection import train_test_split
 from sklearn.utils.class_weight import compute_class_weight
+from preprocess_utils import train_net
 
 
 ################################################################################
@@ -126,7 +127,7 @@ def train_challenge_model(data_folder, model_folder, verbose):
                     y=np.argmax(y_relabeled_murmurs, axis=1)
                 )
 
-                output_class_weights = compute_class_weight(
+                outcome_class_weights = compute_class_weight(
                     class_weight='balanced',
                     classes=np.unique(np.argmax(y_outcomes_seg, axis=1)),
                     y=np.argmax(y_outcomes_seg, axis=1))
@@ -136,7 +137,7 @@ def train_challenge_model(data_folder, model_folder, verbose):
                                                murmur_image_folders[i], murmur_image_relabel_folders[i],
                                                outcome_image_folders[i])
 
-    # Train neural net.
+    # Train neural murmur_net.
     if verbose >= 1:
         print('Training neural network...')
 
@@ -155,65 +156,32 @@ def train_challenge_model(data_folder, model_folder, verbose):
         ]),
     }
 
+    # train and save murmur classification model
     # create pytorch datasets from folders where we saved images
     train_set = datasets.ImageFolder(root=murmur_image_folders[0], transform=data_transforms['train'])
     valid_set = datasets.ImageFolder(root=murmur_image_folders[1], transform=data_transforms['val'])
+    murmur_net = train_net(train_set, valid_set, murmur_class_weights, scratch_name='murmur')
 
-    # Create a torch.device() which should be the GPU if CUDA is available
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    # train and save relabeled murmur classification net
+    train_set = datasets.ImageFolder(root=murmur_image_relabel_folders[0], transform=data_transforms['train'])
+    valid_set = datasets.ImageFolder(root=murmur_image_relabel_folders[1], transform=data_transforms['val'])
+    murmur_relabel_net = train_net(train_set, valid_set, relabeled_murmur_class_weights, scratch_name='murmur_relabel')
 
-    loaded_resnet18 = ResNet18(n_classes=2, pretrained_weights=False)
-    loaded_resnet18.load_state_dict(torch.load('pretrained_resnet18'))
-
-    net = NeuralNetClassifier(
-        module=loaded_resnet18,
-        criterion=nn.CrossEntropyLoss,
-        lr=0.001,
-        batch_size=4,
-        max_epochs=20,
-        optimizer=optim.SGD,
-        optimizer__momentum=0.9,
-        optimizer__weight_decay=0.0005,
-        train_split=predefined_split(valid_set),
-        iterator_train__shuffle=True,
-        iterator_train__num_workers=8,
-        iterator_valid__shuffle=False,
-        iterator_valid__num_workers=8,
-        callbacks=[
-            ('lr_scheduler',
-             LRScheduler(policy='ReduceLROnPlateau', patience=3, factor=0.1)),
-            ('checkpoint',
-             Checkpoint(dirname=model_folder,
-                        monitor='valid_acc_best',
-                        f_params='model.pkl',
-                        f_optimizer='opt.pkl',
-                        f_criterion='criterion.pkl',
-                        f_history='history.json')),
-        ],
-        device=device
-    )
-
-    # initialize neural network
-    net.initialize()
-
-    # load parameters from pretrained model
-    pretrained_model_folder = './pretrain_resnet_unfreeze/'
-    param_fname = os.path.join(pretrained_model_folder, 'model.pkl')
-    net.load_params(f_params=param_fname)
-
-    # change number of murmur_classes in classification layer
-    n_in_features = net.module.model.fc.in_features
-    net.module.model.fc = nn.Linear(in_features=n_in_features, out_features=3)
-
-    net.fit(train_set, y=None)
+    # train outcome classification net
+    train_set = datasets.ImageFolder(root=outcome_image_folders[0], transform=data_transforms['train'])
+    valid_set = datasets.ImageFolder(root=outcome_image_folders[1], transform=data_transforms['val'])
+    outcome_net = train_net(train_set, valid_set, outcome_class_weights, scratch_name='outcome')
 
     # Create a folder for the model if it does not already exist.
     os.makedirs(model_folder, exist_ok=True)
+    relabel_model_folder = model_folder + 'relabel'
+    os.makedirs(relabel_model_folder, exist_ok=True)
 
     # Save the model.
     murmur_classes = ['absent', 'present', 'unknown']
-    # save_challenge_model(model_folder, murmur_classes, net, ensemble_classifier, imputer)
-    save_challenge_model(model_folder, murmur_classes, net)
+    outcome_classes = ['abnormal', 'normal']
+    save_challenge_model(model_folder, murmur_classes, murmur_net, outcome_classes, outcome_net)
+    save_challenge_model(relabel_model_folder, murmur_classes, murmur_relabel_net, outcome_classes, outcome_net)
 
     if verbose >= 1:
         print('Done.')
@@ -228,8 +196,10 @@ def load_challenge_model(model_folder, verbose):
 # arguments of this function.
 def run_challenge_model(model, data, recordings, verbose):
 
-    classes = model['classes']
-    net = model['net']
+    murmur_classes = model['murmur_classes']
+    murmur_net = model['murmur_net']
+    outcome_classes = model['outcome_classes']
+    outcome_net = model['outcome_net']
 
     # preprocess test data
     recordings = test_data_utils.get_test_data(data, recordings, verbose, fs_resample=1000, fs=4000)
@@ -253,16 +223,16 @@ def run_challenge_model(model, data, recordings, verbose):
     img_t = torch.vstack(img_t)
 
     # run each image through model
-    img_probabilities = net.predict_proba(img_t)
+    img_probabilities = murmur_net.predict_proba(img_t)
 
     # decision rule: first check if any images are classified as unknown, if yes, then classify
     # as unknown. If no, then move on to present. If no, then classify as absent.
-    abs_idx = classes.index('absent')
-    pres_idx = classes.index('present')
-    unknown_idx = classes.index('unknown')
+    abs_idx = murmur_classes.index('absent')
+    pres_idx = murmur_classes.index('present')
+    unknown_idx = murmur_classes.index('unknown')
 
     probabilities = np.mean(img_probabilities, axis=0)
-    labels = np.zeros(len(classes), dtype=np.int_)
+    labels = np.zeros(len(murmur_classes), dtype=np.int_)
     th1 = 0.06
     th2 = 0.07
     if probabilities[pres_idx] > th1:
@@ -273,7 +243,7 @@ def run_challenge_model(model, data, recordings, verbose):
         idx = abs_idx
     labels[idx] = 1
 
-    return classes, labels, probabilities
+    return murmur_classes, labels, probabilities
 
 
 ################################################################################
@@ -283,10 +253,14 @@ def run_challenge_model(model, data, recordings, verbose):
 ################################################################################
 
 # Save your trained model.
-def save_challenge_model(model_folder, classes, net):
-    d = {'classes': classes, 'net': net}
+def save_challenge_model(model_folder, murmur_classes, murmur_net, outcome_classes, outcome_net):
+    d = {'murmur_classes': murmur_classes,
+         'murmur_net': murmur_net,
+         'outcome_classes': outcome_classes,
+         'outcome_net': outcome_net}
     filename = os.path.join(model_folder, 'model.sav')
     joblib.dump(d, filename, protocol=0)
+
 
 # Extract features from the data.
 def get_features(data, recordings):

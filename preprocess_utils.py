@@ -6,6 +6,15 @@ from PIL import Image
 from wavelets_pytorch.transform import WaveletTransform
 from sklearn.model_selection import train_test_split
 import glob, shutil
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from skorch import NeuralNetClassifier
+from skorch.helper import predefined_split
+from skorch.callbacks import LRScheduler
+from skorch.callbacks import Checkpoint
+from pretrain_model_utils import ResNet18
+from team_code import save_challenge_model
 
 # Apply preprocessing steps to signal
 def preprocess(sig, fs_resample, fs):
@@ -491,6 +500,7 @@ def get_features(data, recordings):
 
     return np.asarray(features, dtype=np.float32)
 
+
 def get_murmur_locations(data):
     for l in data.split('\n'):
         if l.startswith('#Murmur locations:'):
@@ -498,3 +508,58 @@ def get_murmur_locations(data):
             murmur_locations = murmur_locations.split('+')
 
     return murmur_locations
+
+
+def train_net(train_set, valid_set, class_weights, scratch_name):
+
+    # Create a torch.device() which should be the GPU if CUDA is available
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    loaded_resnet18 = ResNet18(n_classes=2, pretrained_weights=False)
+    loaded_resnet18.load_state_dict(torch.load('pretrained_resnet18'))
+
+    scratch_folder = './' + scratch_name + '_scratch/'
+
+    net = NeuralNetClassifier(
+        module=loaded_resnet18,
+        criterion=nn.CrossEntropyLoss(weight=class_weights),
+        lr=0.001,
+        batch_size=4,
+        max_epochs=20,
+        optimizer=optim.SGD,
+        optimizer__momentum=0.9,
+        optimizer__weight_decay=0.0005,
+        train_split=predefined_split(valid_set),
+        iterator_train__shuffle=True,
+        iterator_train__num_workers=8,
+        iterator_valid__shuffle=False,
+        iterator_valid__num_workers=8,
+        callbacks=[
+            ('lr_scheduler',
+             LRScheduler(policy='ReduceLROnPlateau', patience=3, factor=0.1)),
+            ('checkpoint',
+             Checkpoint(dirname=scratch_folder,
+                        monitor='valid_acc_best',
+                        f_params='model.pkl',
+                        f_optimizer='opt.pkl',
+                        f_criterion='criterion.pkl',
+                        f_history='history.json')),
+        ],
+        device=device
+    )
+
+    # initialize neural network
+    net.initialize()
+
+    # load parameters from pretrained model
+    pretrained_model_folder = './pretrain_resnet_unfreeze/'
+    param_fname = os.path.join(pretrained_model_folder, 'model.pkl')
+    net.load_params(f_params=param_fname)
+
+    # change number of murmur_classes in classification layer
+    n_in_features = net.module.model.fc.in_features
+    net.module.model.fc = nn.Linear(in_features=n_in_features, out_features=3)
+
+    net.fit(train_set, y=None)
+
+    return net

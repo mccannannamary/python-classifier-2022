@@ -119,7 +119,7 @@ def get_cfs_as_jpg(cfs):
     cfs = (cfs - cfs.min()) / (cfs.max() - cfs.min())
 
     # create colormap
-    cmap = cm.get_cmap('jet', 256)
+    cmap = cm.get_cmap('binary')
 
     # apply colormap to data, return as ints from 0 to 255
     img = cmap(cfs, bytes=True)
