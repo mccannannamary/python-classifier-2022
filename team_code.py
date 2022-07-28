@@ -51,8 +51,10 @@ def train_challenge_model(data_folder, model_folder, verbose):
         patient_files = find_patient_files(data_folder)
         n_patient_files = len(patient_files)
 
-        classes = ['Present', 'Unknown', 'Absent']
-        n_classes = len(classes)
+        murmur_classes = ['Present', 'Unknown', 'Absent']
+        n_murmur_classes = len(murmur_classes)
+        outcome_classes = ['Abnormal', 'Normal']
+        n_outcome_classes = len(outcome_classes)
 
         pt_ids = list()
         murmurs = list()
@@ -62,10 +64,10 @@ def train_challenge_model(data_folder, model_folder, verbose):
             current_patient_id = current_patient_data.split('\n')[0].split(' ')[0]
             pt_ids.append(current_patient_id)
 
-            current_labels = np.zeros(n_classes, dtype=int)
+            current_labels = np.zeros(n_murmur_classes, dtype=int)
             label = get_murmur(current_patient_data)
-            if label in classes:
-                j = classes.index(label)
+            if label in murmur_classes:
+                j = murmur_classes.index(label)
                 current_labels[j] = 1
             murmurs.append(current_labels)
 
@@ -92,10 +94,9 @@ def train_challenge_model(data_folder, model_folder, verbose):
                 shutil.copy(file, val_folder)
 
     data_folders = [train_folder, val_folder]
-    murmur_image_folders = ['./datasets/cwt_imgs/train/',
-                     './datasets/cwt_imgs/val/']
-    murmur_image_relabel_folders = ['./datasets/relabel_cwt_imgs/train/',
-                             './datasets/relabel_cwt_imgs/val/']
+    murmur_image_folders = ['./datasets/imgs/murmur/train/', './datasets/imgs/murmur/val/']
+    murmur_image_relabel_folders = ['./datasets/imgs/relabeled_murmur/train/', './datasets/imgs/relabeled_murmur/val/']
+    outcome_image_folders = ['./datasets/imgs/outcome/train/', './datasets/imgs/outcome/val/']
 
     # using split dataset, create CWT images from segments of PCG data and save in 'murmur_image_folders'
     if create_dataset:
@@ -118,14 +119,23 @@ def train_challenge_model(data_folder, model_folder, verbose):
                     class_weight='balanced',
                     classes=np.unique(np.argmax(y_murmurs, axis=1)),
                     y=np.argmax(y_murmurs, axis=1))
+
+                relabeled_murmur_class_weights = compute_class_weight(
+                    class_weight='balanced',
+                    classes=np.unique(np.argmax(y_relabeled_murmurs, axis=1)),
+                    y=np.argmax(y_relabeled_murmurs, axis=1)
+                )
+
                 output_class_weights = compute_class_weight(
                     class_weight='balanced',
                     classes=np.unique(np.argmax(y_outcomes_seg, axis=1)),
                     y=np.argmax(y_outcomes_seg, axis=1))
 
             # now create and save a CWT image for each PCG segment
-            preprocess_utils.create_cwt_images(X, y_murmurs, y_relabeled_murmurs, names_seg, murmur_image_folders[i], murmur_image_relabel_folders[i])
-            #preprocess_utils.create_cwt_images(X, y_outcomes_seg, names_seg)
+            preprocess_utils.create_cwt_images(X, y_murmurs, y_relabeled_murmurs, y_outcomes_seg, names_seg,
+                                               murmur_image_folders[i], murmur_image_relabel_folders[i],
+                                               outcome_image_folders[i])
+
     # Train neural net.
     if verbose >= 1:
         print('Training neural network...')
@@ -191,7 +201,7 @@ def train_challenge_model(data_folder, model_folder, verbose):
     param_fname = os.path.join(pretrained_model_folder, 'model.pkl')
     net.load_params(f_params=param_fname)
 
-    # change number of classes in classification layer
+    # change number of murmur_classes in classification layer
     n_in_features = net.module.model.fc.in_features
     net.module.model.fc = nn.Linear(in_features=n_in_features, out_features=3)
 
@@ -201,9 +211,9 @@ def train_challenge_model(data_folder, model_folder, verbose):
     os.makedirs(model_folder, exist_ok=True)
 
     # Save the model.
-    classes = ['absent', 'present', 'unknown']
-    # save_challenge_model(model_folder, classes, net, ensemble_classifier, imputer)
-    save_challenge_model(model_folder, classes, net)
+    murmur_classes = ['absent', 'present', 'unknown']
+    # save_challenge_model(model_folder, murmur_classes, net, ensemble_classifier, imputer)
+    save_challenge_model(model_folder, murmur_classes, net)
 
     if verbose >= 1:
         print('Done.')

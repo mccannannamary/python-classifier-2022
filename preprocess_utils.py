@@ -282,7 +282,7 @@ def segment_challenge_data(X, y_murmurs, y_relabeled_murmurs, y_outcomes, rec_na
     return X_seg, y_murmurs_seg, y_murmurs_seg_relabel, y_outcomes_seg, names_seg
 
 
-def create_cwt_images(X, y, y_relabel, name, jpg_dir, jpg_dir_relabel):
+def create_cwt_images(X, y_murmurs, y_relabeled_murmurs, y_outcomes, name, murmur_im_dir, murmur_im_dir_relabel, outcome_im_dir):
     fs = 1000
 
     n_samples = X.shape[0]
@@ -304,10 +304,13 @@ def create_cwt_images(X, y, y_relabel, name, jpg_dir, jpg_dir_relabel):
 
         for idx, cf in enumerate(cfs):
             # save cf as image here
-            save_cfs_as_jpg(cf, y[batch_start+idx],
-                            y_relabel[batch_start+idx],
+            save_cfs_as_jpg(cf, y_murmurs[batch_start + idx, :],
+                            y_relabeled_murmurs[batch_start + idx, :],
+                            y_outcomes[batch_start + idx, :],
                             name[batch_start+idx],
-                            im_dir=jpg_dir, im_dir_relabel=jpg_dir_relabel)
+                            murmur_im_dir=murmur_im_dir,
+                            murmur_im_dir_relabel=murmur_im_dir_relabel,
+                            outcome_im_dir=outcome_im_dir)
 
         batch_start += batch_size
         batch_end += batch_size
@@ -319,17 +322,22 @@ def create_cwt_images(X, y, y_relabel, name, jpg_dir, jpg_dir_relabel):
 
     for idx, cf in enumerate(cfs):
         # jpg image
-        save_cfs_as_jpg(cf, y[batch_start+idx, :],
-                        y_relabel[batch_start+idx],
+        save_cfs_as_jpg(cf, y_murmurs[batch_start + idx, :],
+                        y_relabeled_murmurs[batch_start + idx, :],
+                        y_outcomes[batch_start + idx, :],
                         name[batch_start+idx],
-                        im_dir=jpg_dir, im_dir_relabel=jpg_dir_relabel)
+                        murmur_im_dir=murmur_im_dir,
+                        murmur_im_dir_relabel=murmur_im_dir_relabel,
+                        outcome_im_dir=outcome_im_dir)
 
 
-def save_cfs_as_jpg(cfs, y, y_relabel, fname, im_dir, im_dir_relabel):
-    # extract label for saving
-    classes = ['present', 'unknown', 'absent']
-    label = classes[np.argmax(y)]
-    relabel = classes[np.argmax(y_relabel)]
+def save_cfs_as_jpg(cfs, y_murmur, y_relabeled_murmur, y_outcome, fname, murmur_im_dir, murmur_im_dir_relabel, outcome_im_dir):
+    # extract murmur_label for saving
+    murmur_classes = ['present', 'unknown', 'absent']
+    outcome_classes = ['abnormal', 'normal']
+    murmur_label = murmur_classes[np.argmax(y_murmur)]
+    murmur_relabel = murmur_classes[np.argmax(y_relabeled_murmur)]
+    outcome_label = outcome_classes[np.argmax(y_outcome)]
 
     # rescale cfs to interval [0, 1]
     cfs = (cfs - cfs.min()) / (cfs.max() - cfs.min())
@@ -349,18 +357,23 @@ def save_cfs_as_jpg(cfs, y, y_relabel, fname, im_dir, im_dir_relabel):
     # resize the image
     img = img.resize((224, 224))
 
-    # save image in appropriate class directory
-    save_dir = os.path.join(im_dir, label)
+    # save image in appropriate class directory for murmurs
+    save_dir = os.path.join(murmur_im_dir, murmur_label)
     os.makedirs(save_dir, exist_ok=True)
     tmp_fname = os.path.join(save_dir, fname)
     img.save(tmp_fname + '.jpg')
 
-    # save image in appropriate class directory
-    save_dir = os.path.join(im_dir_relabel, relabel)
+    # save image in appropriate class directory for relabeled murmurs
+    save_dir = os.path.join(murmur_im_dir_relabel, murmur_relabel)
     os.makedirs(save_dir, exist_ok=True)
     tmp_fname = os.path.join(save_dir, fname)
     img.save(tmp_fname + '.jpg')
 
+    # save image in appropriate class directory for outcomes
+    save_dir = os.path.join(outcome_im_dir, outcome_label)
+    os.makedirs(save_dir, exist_ok=True)
+    tmp_fname = os.path.join(save_dir, fname)
+    img.save(tmp_fname + '.jpg')
 
 
 def split_data(data_folder, train_folder, val_folder, test_folder):
