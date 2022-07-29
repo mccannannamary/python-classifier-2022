@@ -20,6 +20,7 @@ if __name__ == '__main__':
     # Define the data and model foldes.
     data_folder = sys.argv[1]
     model_folder = sys.argv[2]
+    relabel_flag = sys.argv[3]
 
     # Change the level of verbosity; helpful for debugging.
     if len(sys.argv)==4 and is_integer(sys.argv[3]):
@@ -27,4 +28,4 @@ if __name__ == '__main__':
     else:
         verbose = 1
 
-    train_challenge_model(data_folder, model_folder, verbose) ### Teams: Implement this function!!!
+    train_challenge_model(data_folder, model_folder, relabel_flag, verbose) ### Teams: Implement this function!!!

@@ -520,6 +520,7 @@ def train_net(train_set, valid_set, class_weights, scratch_name):
 
     scratch_folder = './' + scratch_name + '_scratch/'
     class_weights = torch.FloatTensor(class_weights)
+    n_classes = len(class_weights)
 
     net = NeuralNetClassifier(
         module=loaded_resnet18,
@@ -559,7 +560,7 @@ def train_net(train_set, valid_set, class_weights, scratch_name):
 
     # change number of murmur_classes in classification layer
     n_in_features = net.module.model.fc.in_features
-    net.module.model.fc = nn.Linear(in_features=n_in_features, out_features=3)
+    net.module.model.fc = nn.Linear(in_features=n_in_features, out_features=n_classes)
 
     net.fit(train_set, y=None)
 
