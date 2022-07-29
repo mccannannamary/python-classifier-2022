@@ -8,26 +8,17 @@
 # Import libraries and functions. You can change or remove them.
 #
 ################################################################################
-import sklearn.utils.class_weight
-import torchvision.models
-
 import preprocess_utils
 import test_data_utils
 from helper_code import *
-import numpy as np, scipy as sp, scipy.stats, os, joblib
+import numpy as np, scipy as sp, pandas as pd, scipy.stats, os, joblib
+from collections import Counter
 import glob, shutil
 import torch
-import torch.nn as nn
-import torch.optim as optim
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
-from skorch import NeuralNetClassifier
-from skorch.helper import predefined_split
-from skorch.callbacks import LRScheduler
-from skorch.callbacks import Checkpoint
-from pretrain_model_utils import ResNet18
+
 from sklearn.model_selection import train_test_split
-from sklearn.utils.class_weight import compute_class_weight
 from preprocess_utils import train_net
 
 
@@ -41,7 +32,7 @@ from preprocess_utils import train_net
 def train_challenge_model(data_folder, model_folder, verbose):
 
     split_dataset = False
-    create_dataset = True
+    create_dataset = False
 
     # do stratified split of all available data into train, validation, and test folders
     # to prevent overfitting when training model
@@ -114,28 +105,11 @@ def train_challenge_model(data_folder, model_folder, verbose):
             X, y_murmurs, y_relabeled_murmurs, y_outcomes_seg, names_seg = \
                 preprocess_utils.segment_challenge_data(recordings, murmurs, relabeled_murmurs, outcomes, rec_names)
 
-            # using train set, calculate class weights to be given to CrossEntropyLoss
-            if i == 0:
-                murmur_class_weights = compute_class_weight(
-                    class_weight='balanced',
-                    classes=np.unique(np.argmax(y_murmurs, axis=1)),
-                    y=np.argmax(y_murmurs, axis=1))
-
-                relabeled_murmur_class_weights = compute_class_weight(
-                    class_weight='balanced',
-                    classes=np.unique(np.argmax(y_relabeled_murmurs, axis=1)),
-                    y=np.argmax(y_relabeled_murmurs, axis=1)
-                )
-
-                outcome_class_weights = compute_class_weight(
-                    class_weight='balanced',
-                    classes=np.unique(np.argmax(y_outcomes_seg, axis=1)),
-                    y=np.argmax(y_outcomes_seg, axis=1))
-
             # now create and save a CWT image for each PCG segment
             preprocess_utils.create_cwt_images(X, y_murmurs, y_relabeled_murmurs, y_outcomes_seg, names_seg,
                                                murmur_image_folders[i], murmur_image_relabel_folders[i],
                                                outcome_image_folders[i])
+
 
     # Train neural murmur_net.
     if verbose >= 1:
@@ -160,17 +134,26 @@ def train_challenge_model(data_folder, model_folder, verbose):
     # create pytorch datasets from folders where we saved images
     train_set = datasets.ImageFolder(root=murmur_image_folders[0], transform=data_transforms['train'])
     valid_set = datasets.ImageFolder(root=murmur_image_folders[1], transform=data_transforms['val'])
-    murmur_net = train_net(train_set, valid_set, murmur_class_weights, scratch_name='murmur')
+    train_classes = [label for _, label in train_set]
+    class_count = Counter(train_classes)
+    class_weights = torch.Tensor([len(train_classes)/c for c in pd.Series(class_count).sort_index().values])
+    murmur_net = train_net(train_set, valid_set, class_weights, scratch_name='murmur')
 
     # train and save relabeled murmur classification net
     train_set = datasets.ImageFolder(root=murmur_image_relabel_folders[0], transform=data_transforms['train'])
     valid_set = datasets.ImageFolder(root=murmur_image_relabel_folders[1], transform=data_transforms['val'])
-    murmur_relabel_net = train_net(train_set, valid_set, relabeled_murmur_class_weights, scratch_name='murmur_relabel')
+    train_classes = [label for _, label in train_set]
+    class_count = Counter(train_classes)
+    class_weights = torch.Tensor([len(train_classes)/c for c in pd.Series(class_count).sort_index().values])
+    murmur_relabel_net = train_net(train_set, valid_set, class_weights, scratch_name='murmur_relabel')
 
     # train outcome classification net
     train_set = datasets.ImageFolder(root=outcome_image_folders[0], transform=data_transforms['train'])
     valid_set = datasets.ImageFolder(root=outcome_image_folders[1], transform=data_transforms['val'])
-    outcome_net = train_net(train_set, valid_set, outcome_class_weights, scratch_name='outcome')
+    train_classes = [label for _, label in train_set]
+    class_count = Counter(train_classes)
+    class_weights = torch.Tensor([len(train_classes)/c for c in pd.Series(class_count).sort_index().values])
+    outcome_net = train_net(train_set, valid_set, class_weights, scratch_name='outcome')
 
     # Create a folder for the model if it does not already exist.
     os.makedirs(model_folder, exist_ok=True)

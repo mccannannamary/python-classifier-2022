@@ -14,7 +14,7 @@ from skorch.helper import predefined_split
 from skorch.callbacks import LRScheduler
 from skorch.callbacks import Checkpoint
 from pretrain_model_utils import ResNet18
-from team_code import save_challenge_model
+
 
 # Apply preprocessing steps to signal
 def preprocess(sig, fs_resample, fs):
@@ -519,6 +519,7 @@ def train_net(train_set, valid_set, class_weights, scratch_name):
     loaded_resnet18.load_state_dict(torch.load('pretrained_resnet18'))
 
     scratch_folder = './' + scratch_name + '_scratch/'
+    class_weights = torch.FloatTensor(class_weights)
 
     net = NeuralNetClassifier(
         module=loaded_resnet18,
