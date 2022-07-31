@@ -209,8 +209,9 @@ def run_challenge_model(model, data, recordings, verbose):
         img_t.append(transform(img).unsqueeze(0))
     img_t = torch.vstack(img_t)
 
-    # run each image through model
-    img_probabilities = murmur_net.predict_proba(img_t)
+    # get classifier murmur_probabilities
+    murmur_probabilities = murmur_net.predict_proba(img_t)
+    outcome_probabilities = outcome_net.predict_proba(img_t)
 
     # decision rule: first check if any images are classified as unknown, if yes, then classify
     # as unknown. If no, then move on to present. If no, then classify as absent.
@@ -218,19 +219,30 @@ def run_challenge_model(model, data, recordings, verbose):
     pres_idx = murmur_classes.index('present')
     unknown_idx = murmur_classes.index('unknown')
 
-    probabilities = np.mean(img_probabilities, axis=0)
-    labels = np.zeros(len(murmur_classes), dtype=np.int_)
+    murmur_probabilities = np.mean(murmur_probabilities, axis=0)
+    murmur_labels = np.zeros(len(murmur_classes), dtype=np.int_)
     th1 = 0.06
     th2 = 0.07
-    if probabilities[pres_idx] > th1:
+    if murmur_probabilities[pres_idx] > th1:
         idx = pres_idx
-    elif probabilities[unknown_idx] > th2:
+    elif murmur_probabilities[unknown_idx] > th2:
         idx = unknown_idx
     else:
         idx = abs_idx
-    labels[idx] = 1
+    murmur_labels[idx] = 1
 
-    return murmur_classes, labels, probabilities
+    # choose outcome label with highest probability
+    outcome_probabilities = np.mean(outcome_probabilities, axis=0)
+    outcome_labels = np.zeros(len(outcome_classes), dtype=np.int_)
+    idx = np.argmax(outcome_probabilities)
+    outcome_labels[idx] = 1
+
+    # concatenate classes, labels, and probabilities
+    classes = murmur_classes + outcome_classes
+    labels = np.concatenate((murmur_labels, outcome_labels))
+    probabilities = np.concatenate((murmur_probabilities, outcome_probabilities))
+
+    return classes, labels, probabilities
 
 
 ################################################################################
