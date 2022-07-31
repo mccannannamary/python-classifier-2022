@@ -51,18 +51,19 @@ class AlexNet(nn.Module):
 
 
 class ResNet18(nn.Module):
-    def __init__(self, n_classes, pretrained_weights):
+    def __init__(self, n_classes, pretrained_weights, freeze_shallow):
         super().__init__()
 
         # load a pre-trained ResNet18
         model = models.resnet18(pretrained=pretrained_weights)
 
         # Freeze layers in all but final linear layer
-        # for param in model.parameters():
-        #     param.requires_grad_(False)
-        #
-        # for param in model.fc.parameters():
-        #     param.requires_grad_(True)
+        if freeze_shallow:
+            for param in model.parameters():
+                param.requires_grad_(False)
+
+            for param in model.fc.parameters():
+                param.requires_grad_(True)
 
         n_in_features = model.fc.in_features
         model.fc = nn.Linear(in_features=n_in_features, out_features=n_classes)

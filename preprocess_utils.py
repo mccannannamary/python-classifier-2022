@@ -510,13 +510,16 @@ def get_murmur_locations(data):
     return murmur_locations
 
 
-def train_net(train_set, valid_set, class_weights, scratch_name):
+def train_net(train_set, valid_set, class_weights, scratch_name, freeze_shallow, pretrain):
 
     # Create a torch.device() which should be the GPU if CUDA is available
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    loaded_resnet18 = ResNet18(n_classes=2, pretrained_weights=False)
-    loaded_resnet18.load_state_dict(torch.load('pretrained_resnet18'))
+    if pretrain:
+        loaded_resnet18 = ResNet18(n_classes=2, pretrained_weights=False, freeze_shallow=freeze_shallow)
+        loaded_resnet18.load_state_dict(torch.load('pretrained_resnet18'))
+    else:
+        loaded_resnet18 = ResNet18(n_classes=2, pretrained_weights=True, freeze_shallow=freeze_shallow)
 
     scratch_folder = './' + scratch_name + '_scratch/'
     class_weights = torch.FloatTensor(class_weights)
@@ -554,9 +557,10 @@ def train_net(train_set, valid_set, class_weights, scratch_name):
     net.initialize()
 
     # load parameters from pretrained model
-    pretrained_model_folder = './pretrain_resnet_unfreeze/'
-    param_fname = os.path.join(pretrained_model_folder, 'model.pkl')
-    net.load_params(f_params=param_fname)
+    if pretrain:
+        pretrained_model_folder = './pretrain_resnet_unfreeze/'
+        param_fname = os.path.join(pretrained_model_folder, 'model.pkl')
+        net.load_params(f_params=param_fname)
 
     # change number of murmur_classes in classification layer
     n_in_features = net.module.model.fc.in_features

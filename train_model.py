@@ -14,13 +14,15 @@ from team_code import train_challenge_model
 
 if __name__ == '__main__':
     # Parse the arguments.
-    if not (len(sys.argv) == 3 or len(sys.argv) == 4):
-        raise Exception('Include the data and model folders as arguments, e.g., python train_model.py data model.')
+    #if not (len(sys.argv) == 3 or len(sys.argv) == 4):
+     #   raise Exception('Include the data and model folders as arguments, e.g., python train_model.py data model.')
 
     # Define the data and model foldes.
     data_folder = sys.argv[1]
     model_folder = sys.argv[2]
-    relabel_flag = sys.argv[3]
+    relabel = int(sys.argv[4])
+    freeze_shallow = int(sys.argv[5])
+    pretrain = int(sys.argv[6])
 
     # Change the level of verbosity; helpful for debugging.
     if len(sys.argv)==4 and is_integer(sys.argv[3]):
@@ -28,4 +30,4 @@ if __name__ == '__main__':
     else:
         verbose = 1
 
-    train_challenge_model(data_folder, model_folder, relabel_flag, verbose) ### Teams: Implement this function!!!
+    train_challenge_model(data_folder, model_folder, verbose, relabel, freeze_shallow, pretrain) ### Teams: Implement this function!!!

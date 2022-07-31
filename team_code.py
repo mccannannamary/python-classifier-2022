@@ -21,7 +21,6 @@ import torchvision.datasets as datasets
 from sklearn.model_selection import train_test_split
 from preprocess_utils import train_net
 
-
 ################################################################################
 #
 # Required functions. Edit these functions to add your code, but do not change the arguments.
@@ -29,7 +28,7 @@ from preprocess_utils import train_net
 ################################################################################
 
 # Train your model.
-def train_challenge_model(data_folder, model_folder, relabel_flag, verbose):
+def train_challenge_model(data_folder, model_folder, verbose, relabel, freeze_shallow, pretrain):
 
     split_dataset = False
     create_dataset = False
@@ -132,22 +131,22 @@ def train_challenge_model(data_folder, model_folder, relabel_flag, verbose):
 
     # train and save murmur classification model
     # create pytorch datasets from folders where we saved images
-    if relabel_flag == 0:
+    if not relabel:
         train_set = datasets.ImageFolder(root=murmur_image_folders[0], transform=data_transforms['train'])
         valid_set = datasets.ImageFolder(root=murmur_image_folders[1], transform=data_transforms['val'])
         train_classes = [label for _, label in train_set]
         class_count = Counter(train_classes)
         class_weights = torch.Tensor([len(train_classes)/c for c in pd.Series(class_count).sort_index().values])
-        murmur_net = train_net(train_set, valid_set, class_weights, scratch_name='murmur')
+        murmur_net = train_net(train_set, valid_set, class_weights, scratch_name='murmur', freeze_shallow=freeze_shallow, pretrain=pretrain)
 
-    elif relabel_flag == 1:
+    elif relabel:
         # train and save relabeled murmur classification net
         train_set = datasets.ImageFolder(root=murmur_image_relabel_folders[0], transform=data_transforms['train'])
         valid_set = datasets.ImageFolder(root=murmur_image_relabel_folders[1], transform=data_transforms['val'])
         train_classes = [label for _, label in train_set]
         class_count = Counter(train_classes)
         class_weights = torch.Tensor([len(train_classes)/c for c in pd.Series(class_count).sort_index().values])
-        murmur_relabel_net = train_net(train_set, valid_set, class_weights, scratch_name='murmur_relabel')
+        murmur_relabel_net = train_net(train_set, valid_set, class_weights, scratch_name='murmur_relabel', freeze_shallow=freeze_shallow, pretrain=pretrain)
 
     # train outcome classification net
     train_set = datasets.ImageFolder(root=outcome_image_folders[0], transform=data_transforms['train'])
@@ -155,19 +154,20 @@ def train_challenge_model(data_folder, model_folder, relabel_flag, verbose):
     train_classes = [label for _, label in train_set]
     class_count = Counter(train_classes)
     class_weights = torch.Tensor([len(train_classes)/c for c in pd.Series(class_count).sort_index().values])
-    outcome_net = train_net(train_set, valid_set, class_weights, scratch_name='outcome')
+    outcome_net = train_net(train_set, valid_set, class_weights, scratch_name='outcome', freeze_shallow=freeze_shallow, pretrain=pretrain)
 
     # Create a folder for the model if it does not already exist.
+    model_folder = model_folder + 'exp_' + str(relabel) + str(freeze_shallow) + str(pretrain)
     os.makedirs(model_folder, exist_ok=True)
-    relabel_model_folder = model_folder + 'relabel'
+    relabel_model_folder = model_folder + '_relabel'
     os.makedirs(relabel_model_folder, exist_ok=True)
 
     # Save the model.
     murmur_classes = ['absent', 'present', 'unknown']
     outcome_classes = ['abnormal', 'normal']
-    if relabel_flag == 0:
+    if not relabel:
         save_challenge_model(model_folder, murmur_classes, murmur_net, outcome_classes, outcome_net)
-    elif relabel_flag == 1:
+    elif relabel:
         save_challenge_model(relabel_model_folder, murmur_classes, murmur_relabel_net, outcome_classes, outcome_net)
 
     if verbose >= 1:
