@@ -400,17 +400,7 @@ def compute_cost(labels, outputs, label_classes, output_classes):
     return mean_cost
 
 if __name__ == '__main__':
-    label_folder = sys.argv[2]
-    relabel = int(sys.argv[3])
-    freeze_shallow = int(sys.argv[4])
-    pretrain = int(sys.argv[5])
-    weighted_loss = int(sys.argv[6])
-    color = int(sys.argv[7])
-
-    label_folder = label_folder + '_exp_' + str(relabel) + str(freeze_shallow) + str(pretrain) + str(weighted_loss) + str(color)
-
-    #murmur_scores, outcome_scores = evaluate_model(sys.argv[1], sys.argv[2])
-    murmur_scores, outcome_scores = evaluate_model(sys.argv[1], label_folder)
+    murmur_scores, outcome_scores = evaluate_model(sys.argv[1], sys.argv[2])
 
     classes, auroc, auprc, auroc_classes, auprc_classes, f_measure, f_measure_classes, accuracy, accuracy_classes, weighted_accuracy, cost = murmur_scores
     murmur_output_string = 'AUROC,AUPRC,F-measure,Accuracy,Weighted Accuracy,Cost\n{:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f}\n'.format(auroc, auprc, f_measure, accuracy, weighted_accuracy, cost)
@@ -432,8 +422,6 @@ if __name__ == '__main__':
 
     output_string = '#Murmur scores\n' + murmur_output_string + '\n#Outcome scores\n' + outcome_output_string \
         + '\n#Murmur scores (per class)\n' + murmur_class_output_string + '\n#Outcome scores (per class)\n' + outcome_class_output_string
-
-    print(output_string)
 
     if len(sys.argv) == 3:
         print(output_string)

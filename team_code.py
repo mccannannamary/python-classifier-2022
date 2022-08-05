@@ -28,10 +28,15 @@ from preprocess_utils import train_net
 ################################################################################
 
 # Train your model.
-def train_challenge_model(data_folder, model_folder, verbose, relabel, freeze_shallow, pretrain, weighted_loss, color):
+def train_challenge_model(data_folder, model_folder, verbose):
 
-    split_dataset = False
-    create_dataset = False
+    split_dataset = True
+    create_dataset = True
+    relabel = int(0)
+    freeze_shallow = int(0)
+    pretrain = int(1)
+    weighted_loss = int(1)
+    color = int(1)
 
     # do stratified split of all available data into train, validation, and test folders
     # to prevent overfitting when training model
@@ -226,8 +231,8 @@ def run_challenge_model(model, data, recordings, verbose):
 
     murmur_probabilities = np.mean(murmur_probabilities, axis=0)
     murmur_labels = np.zeros(len(murmur_classes), dtype=np.int_)
-    th1 = 0.06
-    th2 = 0.07
+    th1 = 0.2
+    th2 = 0.2
     if murmur_probabilities[pres_idx] > th1:
         idx = pres_idx
     elif murmur_probabilities[unknown_idx] > th2:

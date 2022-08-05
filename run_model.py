@@ -14,13 +14,10 @@ from helper_code import *
 from team_code import load_challenge_model, run_challenge_model
 
 # Run model.
-def run_model(model_folder, data_folder, output_folder, relabel, freeze_shallow, pretrain, weighted_loss, color, allow_failures, verbose):
+def run_model(model_folder, data_folder, output_folder, allow_failures, verbose):
     # Load models.
     if verbose >= 1:
         print('Loading Challenge model...')
-
-    model_folder = model_folder + '_exp_' + str(relabel) + str(freeze_shallow) + str(pretrain) + str(weighted_loss) + str(color)
-    output_folder = output_folder + '_exp_' + str(relabel) + str(freeze_shallow) + str(pretrain) + str(weighted_loss) + str(color)
 
     model = load_challenge_model(model_folder, verbose) ### Teams: Implement this function!!!
 
@@ -69,27 +66,21 @@ def run_model(model_folder, data_folder, output_folder, relabel, freeze_shallow,
 
 if __name__ == '__main__':
     # Parse the arguments.
-    #if not (len(sys.argv) == 4 or len(sys.argv) == 5):
-     #   raise Exception('Include the model, data, and output folders as arguments, e.g., python run_model.py model data outputs.')
+    if not (len(sys.argv) == 4 or len(sys.argv) == 5):
+        raise Exception('Include the model, data, and output folders as arguments, e.g., python run_model.py model data outputs.')
 
     # Define the model, data, and output folders.
     model_folder = sys.argv[1]
     data_folder = sys.argv[2]
     output_folder = sys.argv[3]
-    relabel = int(sys.argv[4])
-    freeze_shallow = int(sys.argv[5])
-    pretrain = int(sys.argv[6])
-    weighted_loss = int(sys.argv[7])
-    color = int(sys.argv[8])
 
     # Allow or disallow the model to fail on parts of the data; helpful for debugging.
     allow_failures = False
 
     # Change the level of verbosity; helpful for debugging.
-    #if len(sys.argv)==5 and is_integer(sys.argv[4]):
-    #    verbose = int(sys.argv[4])
-    #else:
-    #    verbose = 1
-    verbose = 0
+    if len(sys.argv)==5 and is_integer(sys.argv[4]):
+        verbose = int(sys.argv[4])
+    else:
+        verbose = 1
 
-    run_model(model_folder, data_folder, output_folder, relabel, freeze_shallow, pretrain, weighted_loss, color, allow_failures, verbose)
+    run_model(model_folder, data_folder, output_folder, allow_failures, verbose)
