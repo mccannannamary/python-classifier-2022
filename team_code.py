@@ -28,7 +28,7 @@ from preprocess_utils import train_net
 ################################################################################
 
 # Train your model.
-def train_challenge_model(data_folder, model_folder, verbose, relabel, freeze_shallow, pretrain):
+def train_challenge_model(data_folder, model_folder, verbose, relabel, freeze_shallow, pretrain, weighted_loss, color):
 
     split_dataset = False
     create_dataset = False
@@ -70,7 +70,7 @@ def train_challenge_model(data_folder, model_folder, verbose, relabel, freeze_sh
                              random_state=1,
                              stratify=murmurs)
 
-        # get all files matching ids_train and move to train folder (glob and shutils)
+        # get all files matching ids_train and move to train folde r (glob and shutils)
         os.makedirs(train_folder, exist_ok=True)
         os.makedirs(val_folder, exist_ok=True)
 
@@ -85,9 +85,14 @@ def train_challenge_model(data_folder, model_folder, verbose, relabel, freeze_sh
                 shutil.copy(file, val_folder)
 
     data_folders = [train_folder, val_folder]
-    murmur_image_folders = ['./datasets/imgs/murmur/train/', './datasets/imgs/murmur/val/']
-    murmur_image_relabel_folders = ['./datasets/imgs/relabeled_murmur/train/', './datasets/imgs/relabeled_murmur/val/']
-    outcome_image_folders = ['./datasets/imgs/outcome/train/', './datasets/imgs/outcome/val/']
+    if color:
+        murmur_image_folders = ['./datasets/color_imgs/murmur/train/', './datasets/color_imgs/murmur/val/']
+        murmur_image_relabel_folders = ['./datasets/color_imgs/relabeled_murmur/train/', './datasets/color_imgs/relabeled_murmur/val/']
+        outcome_image_folders = ['./datasets/color_imgs/outcome/train/', './datasets/color_imgs/outcome/val/']
+    else:
+        murmur_image_folders = ['./datasets/imgs/murmur/train/', './datasets/imgs/murmur/val/']
+        murmur_image_relabel_folders = ['./datasets/imgs/relabeled_murmur/train/', './datasets/imgs/relabeled_murmur/val/']
+        outcome_image_folders = ['./datasets/imgs/outcome/train/', './datasets/imgs/outcome/val/']
 
     # using split dataset, create CWT images from segments of PCG data and save in 'murmur_image_folders'
     if create_dataset:
@@ -137,7 +142,7 @@ def train_challenge_model(data_folder, model_folder, verbose, relabel, freeze_sh
         train_classes = [label for _, label in train_set]
         class_count = Counter(train_classes)
         class_weights = torch.Tensor([len(train_classes)/c for c in pd.Series(class_count).sort_index().values])
-        murmur_net = train_net(train_set, valid_set, class_weights, scratch_name='murmur', freeze_shallow=freeze_shallow, pretrain=pretrain)
+        murmur_net = train_net(train_set, valid_set, class_weights, scratch_name='murmur', freeze_shallow=freeze_shallow, pretrain=pretrain, weighted_loss=weighted_loss)
 
     elif relabel:
         # train and save relabeled murmur classification net
@@ -146,7 +151,7 @@ def train_challenge_model(data_folder, model_folder, verbose, relabel, freeze_sh
         train_classes = [label for _, label in train_set]
         class_count = Counter(train_classes)
         class_weights = torch.Tensor([len(train_classes)/c for c in pd.Series(class_count).sort_index().values])
-        murmur_relabel_net = train_net(train_set, valid_set, class_weights, scratch_name='murmur_relabel', freeze_shallow=freeze_shallow, pretrain=pretrain)
+        murmur_relabel_net = train_net(train_set, valid_set, class_weights, scratch_name='murmur_relabel', freeze_shallow=freeze_shallow, pretrain=pretrain, weighted_loss=weighted_loss)
 
     # train outcome classification net
     train_set = datasets.ImageFolder(root=outcome_image_folders[0], transform=data_transforms['train'])
@@ -154,10 +159,10 @@ def train_challenge_model(data_folder, model_folder, verbose, relabel, freeze_sh
     train_classes = [label for _, label in train_set]
     class_count = Counter(train_classes)
     class_weights = torch.Tensor([len(train_classes)/c for c in pd.Series(class_count).sort_index().values])
-    outcome_net = train_net(train_set, valid_set, class_weights, scratch_name='outcome', freeze_shallow=freeze_shallow, pretrain=pretrain)
+    outcome_net = train_net(train_set, valid_set, class_weights, scratch_name='outcome', freeze_shallow=freeze_shallow, pretrain=pretrain, weighted_loss=weighted_loss)
 
     # Create a folder for the model if it does not already exist.
-    model_folder = model_folder + 'exp_' + str(relabel) + str(freeze_shallow) + str(pretrain)
+    model_folder = model_folder + '_exp_' + str(relabel) + str(freeze_shallow) + str(pretrain) + str(weighted_loss) + str(color)
     os.makedirs(model_folder, exist_ok=True)
     relabel_model_folder = model_folder + '_relabel'
     os.makedirs(relabel_model_folder, exist_ok=True)

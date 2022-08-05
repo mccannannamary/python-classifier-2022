@@ -23,6 +23,8 @@ if __name__ == '__main__':
     relabel = int(sys.argv[4])
     freeze_shallow = int(sys.argv[5])
     pretrain = int(sys.argv[6])
+    weighted_loss = int(sys.argv[7])
+    color = int(sys.argv[8])
 
     # Change the level of verbosity; helpful for debugging.
     if len(sys.argv)==4 and is_integer(sys.argv[3]):
@@ -30,4 +32,4 @@ if __name__ == '__main__':
     else:
         verbose = 1
 
-    train_challenge_model(data_folder, model_folder, verbose, relabel, freeze_shallow, pretrain) ### Teams: Implement this function!!!
+    train_challenge_model(data_folder, model_folder, verbose, relabel, freeze_shallow, pretrain, weighted_loss, color) ### Teams: Implement this function!!!

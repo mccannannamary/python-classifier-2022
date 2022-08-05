@@ -352,7 +352,7 @@ def save_cfs_as_jpg(cfs, y_murmur, y_relabeled_murmur, y_outcome, fname, murmur_
     cfs = (cfs - cfs.min()) / (cfs.max() - cfs.min())
 
     # create colormap
-    cmap = cm.get_cmap('binary')
+    cmap = cm.get_cmap('jet', 256)
 
     # apply colormap to data, return as ints from 0 to 255
     img = cmap(cfs, bytes=True)
@@ -510,7 +510,7 @@ def get_murmur_locations(data):
     return murmur_locations
 
 
-def train_net(train_set, valid_set, class_weights, scratch_name, freeze_shallow, pretrain):
+def train_net(train_set, valid_set, class_weights, scratch_name, freeze_shallow, pretrain, weighted_loss):
 
     # Create a torch.device() which should be the GPU if CUDA is available
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -524,6 +524,8 @@ def train_net(train_set, valid_set, class_weights, scratch_name, freeze_shallow,
     scratch_folder = './' + scratch_name + '_scratch/'
     class_weights = torch.FloatTensor(class_weights)
     n_classes = len(class_weights)
+    if not weighted_loss:
+        class_weights = None
 
     net = NeuralNetClassifier(
         module=loaded_resnet18,
@@ -544,7 +546,7 @@ def train_net(train_set, valid_set, class_weights, scratch_name, freeze_shallow,
              LRScheduler(policy='ReduceLROnPlateau', patience=3, factor=0.1)),
             ('checkpoint',
              Checkpoint(dirname=scratch_folder,
-                        monitor='valid_acc_best',
+                        monitor='valid_loss_best',
                         f_params='model.pkl',
                         f_optimizer='opt.pkl',
                         f_criterion='criterion.pkl',
@@ -565,6 +567,8 @@ def train_net(train_set, valid_set, class_weights, scratch_name, freeze_shallow,
     # change number of murmur_classes in classification layer
     n_in_features = net.module.model.fc.in_features
     net.module.model.fc = nn.Linear(in_features=n_in_features, out_features=n_classes)
+
+    print('Training neural network...')
 
     net.fit(train_set, y=None)
 
