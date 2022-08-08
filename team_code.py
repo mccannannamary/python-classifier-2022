@@ -167,7 +167,6 @@ def train_challenge_model(data_folder, model_folder, verbose):
     outcome_net = train_net(train_set, valid_set, class_weights, scratch_name='outcome', freeze_shallow=freeze_shallow, pretrain=pretrain, weighted_loss=weighted_loss)
 
     # Create a folder for the model if it does not already exist.
-    model_folder = model_folder + '_exp_' + str(relabel) + str(freeze_shallow) + str(pretrain) + str(weighted_loss) + str(color)
     os.makedirs(model_folder, exist_ok=True)
     relabel_model_folder = model_folder + '_relabel'
     os.makedirs(relabel_model_folder, exist_ok=True)
