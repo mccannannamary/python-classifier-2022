@@ -510,7 +510,7 @@ def get_murmur_locations(data):
     return murmur_locations
 
 
-def train_net(train_set, valid_set, class_weights, scratch_name, freeze_shallow, pretrain, weighted_loss):
+def train_net(X, y, valid_set, class_weights, scratch_name, freeze_shallow, pretrain, weighted_loss):
 
     # Create a torch.device() which should be the GPU if CUDA is available
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -522,6 +522,15 @@ def train_net(train_set, valid_set, class_weights, scratch_name, freeze_shallow,
         loaded_resnet18 = ResNet18(n_classes=2, pretrained_weights=True, freeze_shallow=freeze_shallow)
 
     scratch_folder = './' + scratch_name + '_scratch/'
+    if 'murmur' in scratch_name:
+        batch_size = 64
+        lr = 0.01
+        max_epochs = 100
+    elif 'outcome' in scratch_name:
+        batch_size = 32
+        lr = 0.01
+        max_epochs = 50
+
     class_weights = torch.FloatTensor(class_weights)
     n_classes = len(class_weights)
     if not weighted_loss:
@@ -530,17 +539,13 @@ def train_net(train_set, valid_set, class_weights, scratch_name, freeze_shallow,
     net = NeuralNetClassifier(
         module=loaded_resnet18,
         criterion=nn.CrossEntropyLoss(weight=class_weights),
-        lr=0.001,
-        batch_size=4,
-        max_epochs=20,
+        lr=lr,
+        batch_size=batch_size,
+        max_epochs=max_epochs,
         optimizer=optim.SGD,
         optimizer__momentum=0.9,
         optimizer__weight_decay=0.0005,
         train_split=predefined_split(valid_set),
-        iterator_train__shuffle=True,
-        iterator_train__num_workers=8,
-        iterator_valid__shuffle=False,
-        iterator_valid__num_workers=8,
         callbacks=[
             ('lr_scheduler',
              LRScheduler(policy='ReduceLROnPlateau', patience=3, factor=0.1)),
@@ -570,6 +575,6 @@ def train_net(train_set, valid_set, class_weights, scratch_name, freeze_shallow,
 
     print('Training neural network...')
 
-    net.fit(train_set, y=None)
+    net.fit(X, y)
 
     return net

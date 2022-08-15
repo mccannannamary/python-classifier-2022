@@ -19,6 +19,7 @@ import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 
 from sklearn.model_selection import train_test_split
+from sklearn.metrics import roc_curve
 from preprocess_utils import train_net
 
 ################################################################################
@@ -32,10 +33,10 @@ def train_challenge_model(data_folder, model_folder, verbose):
 
     split_dataset = True
     create_dataset = True
-    relabel = int(0)
-    freeze_shallow = int(0)
+    relabel = int(1)
+    freeze_shallow = int(1)
     pretrain = int(1)
-    weighted_loss = int(1)
+    weighted_loss = int(0)
     color = int(1)
 
     # do stratified split of all available data into train, validation, and test folders
@@ -139,6 +140,21 @@ def train_challenge_model(data_folder, model_folder, verbose):
         ]),
     }
 
+    transform = transforms.Compose([
+            transforms.ToPILImage(),
+            transforms.RandomResizedCrop(224),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        ])
+
+    X_trans = list()
+    for img in X:
+        tmp_img = transform(img.transpose(1, 2, 0)).numpy()
+        X_trans.append(tmp_img)
+
+    X_trans = np.stack(X_trans)
+
     # train and save murmur classification model
     # create pytorch datasets from folders where we saved images
     if not relabel:
@@ -147,8 +163,9 @@ def train_challenge_model(data_folder, model_folder, verbose):
         train_classes = [label for _, label in train_set]
         class_count = Counter(train_classes)
         class_weights = torch.Tensor([len(train_classes)/c for c in pd.Series(class_count).sort_index().values])
-        murmur_net = train_net(train_set, valid_set, class_weights, scratch_name='murmur', freeze_shallow=freeze_shallow, pretrain=pretrain, weighted_loss=weighted_loss)
-
+        murmur_net = train_net(X_trans, y_murmurs.squeeze().astype(np.int64), valid_set, class_weights,
+                               scratch_name='murmur', freeze_shallow=freeze_shallow, pretrain=pretrain,
+                               weighted_loss=weighted_loss)
     elif relabel:
         # train and save relabeled murmur classification net
         train_set = datasets.ImageFolder(root=murmur_image_relabel_folders[0], transform=data_transforms['train'])
@@ -156,7 +173,7 @@ def train_challenge_model(data_folder, model_folder, verbose):
         train_classes = [label for _, label in train_set]
         class_count = Counter(train_classes)
         class_weights = torch.Tensor([len(train_classes)/c for c in pd.Series(class_count).sort_index().values])
-        murmur_relabel_net = train_net(train_set, valid_set, class_weights, scratch_name='murmur_relabel', freeze_shallow=freeze_shallow, pretrain=pretrain, weighted_loss=weighted_loss)
+        murmur_relabel_net = train_net(X_trans, y_relabeled_murmurs.squeeze().astype(np.int64), valid_set, class_weights, scratch_name='murmur_relabel', freeze_shallow=freeze_shallow, pretrain=pretrain, weighted_loss=weighted_loss)
 
     # train outcome classification net
     train_set = datasets.ImageFolder(root=outcome_image_folders[0], transform=data_transforms['train'])
@@ -164,20 +181,24 @@ def train_challenge_model(data_folder, model_folder, verbose):
     train_classes = [label for _, label in train_set]
     class_count = Counter(train_classes)
     class_weights = torch.Tensor([len(train_classes)/c for c in pd.Series(class_count).sort_index().values])
-    outcome_net = train_net(train_set, valid_set, class_weights, scratch_name='outcome', freeze_shallow=freeze_shallow, pretrain=pretrain, weighted_loss=weighted_loss)
+    outcome_net = train_net(X_trans, y_outcomes_seg.squeeze().astype(np.int64), valid_set, class_weights, scratch_name='outcome', freeze_shallow=freeze_shallow, pretrain=pretrain, weighted_loss=weighted_loss)
+
+    preds = outcome_net.predict_proba(X_trans)
+    preds = preds[:, 1].squeeze()
+    fpr, tpr, thresholds = roc_curve(y_outcomes_seg.squeeze(), preds)
+    optimal_idx = np.argmax(tpr - fpr)
+    optimal_threshold = thresholds[optimal_idx]
 
     # Create a folder for the model if it does not already exist.
     os.makedirs(model_folder, exist_ok=True)
-    relabel_model_folder = model_folder + '_relabel'
-    os.makedirs(relabel_model_folder, exist_ok=True)
 
     # Save the model.
     murmur_classes = ['absent', 'present', 'unknown']
     outcome_classes = ['abnormal', 'normal']
     if not relabel:
-        save_challenge_model(model_folder, murmur_classes, murmur_net, outcome_classes, outcome_net)
+        save_challenge_model(model_folder, murmur_classes, murmur_net, outcome_classes, outcome_net, optimal_threshold)
     elif relabel:
-        save_challenge_model(relabel_model_folder, murmur_classes, murmur_relabel_net, outcome_classes, outcome_net)
+        save_challenge_model(model_folder, murmur_classes, murmur_relabel_net, outcome_classes, outcome_net, optimal_threshold)
 
     if verbose >= 1:
         print('Done.')
@@ -196,6 +217,7 @@ def run_challenge_model(model, data, recordings, verbose):
     murmur_net = model['murmur_net']
     outcome_classes = model['outcome_classes']
     outcome_net = model['outcome_net']
+    optimal_threshold = model['optimal_threshold']
 
     # preprocess test data
     recordings = test_data_utils.get_test_data(data, recordings, verbose, fs_resample=1000, fs=4000)
@@ -230,8 +252,8 @@ def run_challenge_model(model, data, recordings, verbose):
 
     murmur_probabilities = np.mean(murmur_probabilities, axis=0)
     murmur_labels = np.zeros(len(murmur_classes), dtype=np.int_)
-    th1 = 0.2
-    th2 = 0.2
+    th1 = 0.06
+    th2 = 0.07
     if murmur_probabilities[pres_idx] > th1:
         idx = pres_idx
     elif murmur_probabilities[unknown_idx] > th2:
@@ -241,10 +263,14 @@ def run_challenge_model(model, data, recordings, verbose):
     murmur_labels[idx] = 1
 
     # choose outcome label with highest probability
+    abnormal_idx = outcome_classes.index('abnormal')
+    normal_idx = outcome_classes.index('normal')
     outcome_probabilities = np.mean(outcome_probabilities, axis=0)
     outcome_labels = np.zeros(len(outcome_classes), dtype=np.int_)
-    idx = np.argmax(outcome_probabilities)
-    outcome_labels[idx] = 1
+    if outcome_probabilities[normal_idx] > optimal_threshold:
+        outcome_labels[normal_idx] = 1
+    else:
+        outcome_labels[abnormal_idx] = 1
 
     # concatenate classes, labels, and probabilities
     classes = murmur_classes + outcome_classes
@@ -261,11 +287,12 @@ def run_challenge_model(model, data, recordings, verbose):
 ################################################################################
 
 # Save your trained model.
-def save_challenge_model(model_folder, murmur_classes, murmur_net, outcome_classes, outcome_net):
+def save_challenge_model(model_folder, murmur_classes, murmur_net, outcome_classes, outcome_net, optimal_threshold):
     d = {'murmur_classes': murmur_classes,
          'murmur_net': murmur_net,
          'outcome_classes': outcome_classes,
-         'outcome_net': outcome_net}
+         'outcome_net': outcome_net,
+         'optimal_threshold': optimal_threshold}
     filename = os.path.join(model_folder, 'model.sav')
     joblib.dump(d, filename, protocol=0)
 
